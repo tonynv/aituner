@@ -482,3 +482,16 @@ func preferQuants(qs []MLXQuant, budget int64, paramsB float64) []MLXQuant {
 	})
 	return out
 }
+
+// RepoBytes returns the safetensors size of a Hugging Face repo (cached).
+func (e *Engine) RepoBytes(ctx context.Context, id string) (int64, error) {
+	inf, err := e.info(ctx, id)
+	if err != nil {
+		return 0, err
+	}
+	n := inf.SafetensorsBytes()
+	if n == 0 {
+		return 0, errors.New("repo has no safetensors")
+	}
+	return n, nil
+}
