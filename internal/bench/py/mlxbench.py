@@ -23,6 +23,13 @@ def probe(_):
 
     import mlx.core as mx
 
+    import pkgutil
+
+    import mlx_lm.models as models
+    from mlx_lm.utils import MODEL_REMAPPING
+
+    # mlx_lm loads architecture X by importing mlx_lm.models.X, after MODEL_REMAPPING (see utils._get_classes)
+    supported = sorted({m.name for m in pkgutil.iter_modules(models.__path__)} | set(MODEL_REMAPPING))
     di = mx.device_info()
     emit(
         event="probe",
@@ -33,6 +40,7 @@ def probe(_):
         memory_size=di.get("memory_size"),
         max_recommended_working_set_size=di.get("max_recommended_working_set_size"),
         max_buffer_length=di.get("max_buffer_length"),
+        supported_model_types=supported,
     )
 
 

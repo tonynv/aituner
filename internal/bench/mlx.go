@@ -41,11 +41,12 @@ func (m MLX) script() (string, error) {
 
 // Probe reports MLX versions and Metal's recommended working set.
 type Probe struct {
-	MLX                       string `json:"mlx"`
-	MLXLM                     string `json:"mlx_lm"`
-	Device                    string `json:"device"`
-	MaxRecommendedWorkingSetB int64  `json:"max_recommended_working_set_size"`
-	MaxBufferLength           int64  `json:"max_buffer_length"`
+	MLX                       string   `json:"mlx"`
+	MLXLM                     string   `json:"mlx_lm"`
+	Device                    string   `json:"device"`
+	MaxRecommendedWorkingSetB int64    `json:"max_recommended_working_set_size"`
+	MaxBufferLength           int64    `json:"max_buffer_length"`
+	SupportedModelTypes       []string `json:"supported_model_types"`
 }
 
 type line struct {
