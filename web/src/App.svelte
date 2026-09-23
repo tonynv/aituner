@@ -6,7 +6,7 @@
   import Tune from './steps/Tune.svelte';
   import Rerun from './steps/Rerun.svelte';
   import Models from './steps/Models.svelte';
-  import { app, start, currentStep, activeStep, act } from './lib/app.svelte.js';
+  import { app, start, currentStep, activeStep, maxStep, act } from './lib/app.svelte.js';
   import { api } from './lib/api.js';
 
   const STEPS = [
@@ -34,6 +34,7 @@
 
   const st = $derived(app.state);
   const cur = $derived(currentStep());
+  const max = $derived(maxStep());
   const active = $derived(activeStep());
   const machine = $derived(st?.hardware ? `${st.hardware.model.name}, ${st.hardware.cpu.chip}` : '');
 </script>
@@ -58,8 +59,8 @@
       <ol>
         {#each STEPS as s}
           <li>
-            <button class="step" class:current={active === s.n} class:done={s.n < cur} disabled={s.n > cur} onclick={() => (app.view = s.n === cur ? null : s.n)} aria-current={active === s.n ? 'step' : undefined}>
-              <span class="num">{#if s.n < cur}<Icon name="check" size={14} />{:else if s.n > cur}<Icon name="lock" size={12} />{:else}{s.n}{/if}</span>
+            <button class="step" class:current={active === s.n} class:done={s.n < cur || (s.n <= max && s.n !== active && s.n < 5)} disabled={s.n > max} onclick={() => (app.view = s.n === cur ? null : s.n)} aria-current={active === s.n ? 'step' : undefined}>
+              <span class="num">{#if s.n < cur || (s.n <= max && s.n < 5)}<Icon name="check" size={14} />{:else if s.n > max}<Icon name="lock" size={12} />{:else}{s.n}{/if}</span>
               <span class="lbl">{s.label}</span>
             </button>
           </li>

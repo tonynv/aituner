@@ -84,3 +84,6 @@ th, td { text-align: left; padding: 9px 12px 9px 0; border-bottom: 1px solid var
 th { font-weight: 500; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+summary { display: flex; align-items: center; min-height: var(--tap); cursor: pointer; }
+@media (pointer: coarse) { .btn.small { min-height: var(--tap); } }

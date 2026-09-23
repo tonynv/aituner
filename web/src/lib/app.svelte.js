@@ -10,8 +10,10 @@ export const app = $state({
   busy: false,
 });
 
-const PHASE_STEP = { detected: 1, baseline_running: 2, baseline_done: 3, tune_reviewed: 4, tuned_running: 4, tuned_done: 5 };
+// tuned_done stays on step 4 (the comparison); Models is unlocked but the user chooses when to go there
+const PHASE_STEP = { detected: 1, baseline_running: 2, baseline_done: 3, tune_reviewed: 4, tuned_running: 4, tuned_done: 4 };
 export const currentStep = () => (app.state && app.state.phase ? PHASE_STEP[app.state.phase] || 1 : 1);
+export const maxStep = () => (app.state && app.state.recommendations_unlocked ? 5 : currentStep());
 export const activeStep = () => app.view ?? currentStep();
 export const isRunning = () => !!(app.state && app.state.job && app.state.job.running);
 

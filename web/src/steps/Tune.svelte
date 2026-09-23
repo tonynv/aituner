@@ -104,5 +104,4 @@
   .del { display: block; background: var(--diff-del-bg); color: var(--bad); }
   .bad { color: var(--bad); }
   ul { padding-left: 18px; display: grid; gap: 6px; margin: 10px 0 0; }
-  summary { cursor: pointer; min-height: 28px; }
 </style>

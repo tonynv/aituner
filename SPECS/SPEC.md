@@ -1,7 +1,7 @@
 # aituner — SPEC
 
-Status: v0.1 design. Describes what is being built; sections marked **[VERIFIED]** were checked against
-official sources or on the target machine while writing this spec, **[TBD]** must be verified during build.
+Status: v0.1 implemented on macOS (Apple Silicon); Linux not yet. Sections marked **[VERIFIED]** were checked against
+official sources or run on the reference machine; **[UNVERIFIED]** are known gaps (see §15).
 Keep this file current with reality (update in the same change as the code).
 
 ## 1. Goal
@@ -32,9 +32,9 @@ Single-page app, five steps. The **server** enforces order (UI gating is cosmeti
 |---|------|--------------------|-------|
 | 1 | Hardware | `detected` | Launch opens browser here. **No model suggestions anywhere.** |
 | 2 | Run benchmark (baseline) | `baseline_done` | Button. Shows what will be installed/downloaded first. |
-| 3 | Tune: review diff | `tune_planned` → `tune_applied` | Per-change opt-in. Declining all is allowed. |
+| 3 | Tune: review diff | `tune_reviewed` | Per-change opt-in. Declining all is allowed. |
 | 4 | Re-run benchmark + compare | `tuned_done` | Always re-runs, even with zero changes (then it doubles as a noise/variance control). |
-| 5 | Recommendations | `unlocked` | `GET /api/v1/recommendations` returns `409 wrong_phase` before `tuned_done`. |
+| 5 | Recommendations | `tuned_done` | `GET /api/v1/recommendations` returns `409 wrong_phase` before `tuned_done`. Server phases: `detected`, `baseline_running`, `baseline_done`, `tune_reviewed`, `tuned_running`, `tuned_done`; a crash mid-run is recovered to the previous phase at startup. |
 
 Every result is tied to a `run` (one pass through the flow) so history is kept and comparable.
 
@@ -44,7 +44,7 @@ Every result is tied to a `run` (one pass through the flow) so history is kept a
   (`modernc.org/sqlite`, no CGO). Python only as a subprocess for MLX workloads (§6).
 - **Frontend:** Svelte 5 + Vite SPA, static build embedded in the Go binary with `go:embed`. PWA (manifest +
   service worker), responsive, dark and light first-class, thin-line icons, 2–4px radii, no emoji.
-- **Binary:** `aituner` is a **Bubble Tea TUI** (status, URL, live log, quit) that hosts the server and opens the
+- **Binary:** `aituner` is a **Bubble Tea v2 TUI** (`charm.land/bubbletea/v2` v2.0.9, latest stable **[VERIFIED]**; status, URL, live log, quit) that hosts the server and opens the
   browser. `--no-tui` for headless. Launcher **`run_aituner.sh`** is the preflight (§9).
 - **No Docker, no Kubernetes, no third-party SaaS.** The only external services are the two public, read-only,
   unauthenticated sources the user asked for / that the models live on: canirun.ai and huggingface.co.
@@ -115,18 +115,25 @@ machine does not support is not offered (e.g. High Power Mode is absent from thi
 
 v0.1 tunables:
 
-1. **GPU wired memory limit** — `sudo sysctl iogpu.wired_limit_mb=N`. Exists on this machine, currently `0`
-   (= macOS default) **[VERIFIED]**; documented by mlx-lm for large models, macOS 15+ **[VERIFIED]**. Proposed
-   `N = total_MB − reserve`, `reserve = max(6 GB, 15% of RAM)` (32 GB → 26624 MB). Volatile across reboot.
-2. **Persist wired limit (opt-in)** — root LaunchDaemon `ai.aituner.wiredlimit` that re-applies (1) at boot.
-   Removed on revert.
+1. **GPU wired memory limit** — `sudo sysctl iogpu.wired_limit_mb=N`. Exists on this machine, `0` = macOS default
+   **[VERIFIED]**; documented by mlx-lm for large models, macOS 15+ **[VERIFIED]**. Proposed
+   `N = total_MB − reserve`, `reserve = max(5 GiB, 12.5% of RAM)` (32 GB → 27648 MB). **Only offered if it gains ≥ 1 GiB
+   over what MLX reports Metal already allows** (`max_recommended_working_set_size`). Measured on the reference
+   machine: default is already 25.0 GiB of 32, so the gain is +2 GiB — modest, and the UI says it will not speed up
+   models that already fit. Volatile across reboot.
+2. **Persist wired limit (opt-in)** — root LaunchDaemon `ai.aituner.wiredlimit`, built as root with Apple's
+   `plutil` (no user-writable file is ever copied into `/Library`, no shell quoting) and loaded with
+   `launchctl bootstrap`. Removed on revert.
 3. **Ollama server env** — `OLLAMA_FLASH_ATTENTION=1`, `OLLAMA_KV_CACHE_TYPE=q8_0` via `launchctl setenv`
-   (documented at docs.ollama.com/faq **[VERIFIED]**) + restart of Ollama.app (it runs as
-   `/Applications/Ollama.app` here **[VERIFIED]**). User-level, no admin. Only offered if Ollama is present.
+   (docs.ollama.com/faq **[VERIFIED]**), then Ollama.app is restarted with **SIGTERM + `open -a`**. AppleScript
+   `quit` was tried first and fails with `-128 User canceled` (Automation permission) **[VERIFIED on this machine]**.
+   User-level, no admin. **Measured on the reference machine: this made Ollama generation ~9% slower
+   (82.7 → 75.0 tok/s) on the short-prompt benchmark**; the comparison reports it as `slower` and the UI offers Revert.
 
 Rules: nothing is applied without an explicit per-change opt-in after the diff is shown (unified `-/+` view plus
 table). Privileged changes use the native macOS admin prompt (`osascript … with administrator privileges`); aituner
-never sees or stores the password. Every change is logged in `tune_changes` and is revertible from the UI. Tunables
+never sees or stores the password. Every change is logged in `tune_changes` and is revertible from the UI. If an apply fails
+part-way it is **rolled back automatically** so nothing is left half-applied and unrecorded. Tunables
 must not claim a speedup — the re-run measures it and the comparison reports "no significant change" when the delta
 is within measured trial spread.
 
@@ -140,27 +147,34 @@ bandwidth, measured tok/s.
    source **[VERIFIED live: returns grade, status, quant, `vramRequiredGb`, `diskSizeGb`, HF `url`]**. Note the apex
    `canirun.ai` answers `307 → www.canirun.ai`; the client targets `www` directly. canirun.ai is GGUF/VRAM-centric
    and has no MLX or "unrestricted" signal, and it has no benchmark data — hence steps 2–4.
-2. **macOS-optimised resolution** — for each candidate, look up an MLX build via the Hugging Face API
-   (`mlx-community`, tag `mlx`, safetensors; sizes from repo metadata **[VERIFIED]**), fall back to GGUF via Ollama
-   only when no MLX build exists. Re-size against the tuned memory budget; drop anything that does not fit with
-   KV-cache headroom.
+2. **macOS-optimised resolution** — for each candidate, look up a *plain quant* of the same base model in
+   `mlx-community` via the Hugging Face API (fine-tunes/prunes are not accepted as "the same model"); sizes come from
+   repo metadata **[VERIFIED]**. Candidates with no MLX build are dropped and counted ("no MLX build"). Quant preference:
+   4-bit, 8-bit first for small models, bf16 last. **Architecture gate:** the repo's `config.model_type` must be one the
+   *installed* mlx-lm can load (module list + `MODEL_REMAPPING`, read from the venv) — this removed e.g.
+   `diffusion_gemma` **[VERIFIED live]**. Re-sized against the tuned budget with headroom (`max(1.5 GiB, 8%)`; ≤85% of
+   budget = comfortable, ≤100% = tight).
 3. **Speed estimate, calibrated** — `tok/s ≈ eff × measured_bandwidth / bytes_read_per_token` (active params for
    MoE), with `eff` calibrated from the benchmark model's measured tok/s. Always labelled *estimate*.
 4. **Unrestricted profile (default, toggleable)** — open-weight, permissively licensed models plus community
    *abliterated/uncensored* MLX variants of the fitting families (HF search **[VERIFIED they exist]**). Each shows
    provenance (author, downloads, license, last update), safetensors-only (no pickle), and a plain note that these are
    third-party-modified, unaudited weights. `trust_remote_code` is never enabled by default.
-5. **Categories** — code, chat/reasoning, image generation. Image runtime **[TBD]**: candidate is an MLX-based
-   FLUX runner (e.g. mflux); verify against its official repo before recommending. Already-installed Ollama models
+5. **Categories** — code, chat/reasoning, image generation. Image runtime: **mflux** (`uv tool install --upgrade mflux`; supports Z-Image, FLUX.2, FLUX.1, Qwen-Image)
+   **[VERIFIED against github.com/filipstrand/mflux README]**. Only models mflux lists are recommended; only the
+   Z-Image-Turbo command is quoted (the one shown in the README); others link to the README. No speed estimate for images. Already-installed Ollama models
    are marked as installed.
 
-If canirun.ai/HF are unreachable the UI says so and shows cached data with its age — never invented data.
+Memory budget = the larger of Metal's recommended working set and an explicit `iogpu.wired_limit_mb`, read from the
+*current* system (a reverted tune is not credited). Lookups are cached 6 h in the datastore; stale cache is served if the
+network fails; otherwise the UI shows the error — never invented data.
 
 ## 9. Launch and preflight — `run_aituner.sh`
 
-Idempotent; re-run = update to latest stable. Checks/installs: Homebrew, Go (latest), Node LTS, Python 3.14
-(brew), venv + `pip install -U mlx mlx-lm`; builds web then Go if sources changed; verifies Metal/arm64; then
-`exec aituner`. Never uses `sudo` itself. On Linux it exits with a clear "not yet supported".
+Idempotent; re-run = update to latest stable. Installs missing tools and **upgrades outdated Homebrew-managed ones**
+(Go, Node, Python 3.14; `AITUNER_SKIP_UPDATES=1` disables upgrades); requires Homebrew; rebuilds web (`npm ci` + Vite) only
+when sources are newer and Go incrementally; then `exec bin/aituner`. The MLX venv (`pip install -U mlx mlx-lm`) is created by
+the app on the user's first Run click, after consent. Never uses `sudo`. On Linux/Intel it exits with a clear message.
 
 ## 10. Security model (localhost tool that can change system settings)
 
@@ -204,3 +218,26 @@ are reported honestly in `TASKS.md`.
 - D1 (above): SQLite + app-level tenant scoping instead of true RLS.
 - Bubble Tea TUI wraps a web UI (standards say Go binaries are TUIs; product requires a browser UI) — both are provided.
 - Licence for the repo (none chosen yet).
+
+## 15. Measured on the reference machine, and known gaps
+
+Measured end to end through the real UI (Mac Studio M1 Max 32 GB, macOS 26.5.1, mlx 0.32.2, mlx-lm 0.31.3, Ollama 0.34.3):
+
+| Metric | Result |
+|---|---|
+| GPU matmul fp16 / fp32 | 7.07 / 6.42 TFLOPS |
+| GPU memory bandwidth (MLX) | 355 GB/s (canirun.ai reference: 400) |
+| CPU memory copy / read (8 threads) | ~130 / ~122 GB/s |
+| MLX Llama-3.2-3B-4bit prompt / generation | 1000 / 129.6 tok/s |
+| Ollama llama3.2:3b prompt / generation | 884 / 82.3 tok/s (MLX generates ~57% faster) |
+| Speed-estimate calibration | 67% of measured bandwidth |
+
+Known gaps:
+- **[UNVERIFIED]** Applying the wired-limit change (needs the macOS admin dialog) was not exercised: no human was present
+  to approve it. Plan, script generation, allow-list and rollback logic are unit-tested; the real `sysctl`/LaunchDaemon
+  path and whether Metal's working set then follows the new limit still need a human-approved run.
+- Ollama env tuning is not persistent across logout/reboot (`launchctl setenv`); no LaunchAgent yet.
+- Speed estimates are bandwidth models; MoE routing overhead and diffusion/vision architectures are not modelled.
+- Recommendation install commands assume the user runs them from the aituner venv (`~/Library/Application Support/aituner/venv/bin`).
+- Linux: not implemented (`platform` returns `ErrUnsupported`).
+- D1 (SQLite without RLS) still awaits owner sign-off.

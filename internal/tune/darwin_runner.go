@@ -131,12 +131,17 @@ func (r DarwinRunner) restartOllama(ctx context.Context) error {
 	return RestartOllamaApp(ctx)
 }
 
-// RestartOllamaApp quits and relaunches Ollama.app so it re-reads the launchd environment, then waits
-// until the server answers again.
+// RestartOllamaApp stops Ollama.app and relaunches it so it re-reads the launchd environment, then waits
+// until the server answers. It uses SIGTERM (graceful) rather than AppleScript: controlling another app via
+// Apple Events needs an Automation permission that a background tool cannot rely on (error -128).
 func RestartOllamaApp(ctx context.Context) error {
-	_ = exec.CommandContext(ctx, "/usr/bin/osascript", "-e", `tell application "Ollama" to quit`).Run()
-	if err := waitOllama(ctx, false, 20*time.Second); err != nil {
-		return fmt.Errorf("Ollama did not quit: %w", err)
+	// the app's main binary, exactly; then the server it launched, in case it outlives the app
+	_ = exec.CommandContext(ctx, "/usr/bin/pkill", "-TERM", "-f", "^/Applications/Ollama.app/Contents/MacOS/Ollama$").Run()
+	if err := waitOllama(ctx, false, 15*time.Second); err != nil {
+		_ = exec.CommandContext(ctx, "/usr/bin/pkill", "-TERM", "-f", "^/Applications/Ollama.app/Contents/Resources/ollama serve$").Run()
+		if err := waitOllama(ctx, false, 15*time.Second); err != nil {
+			return fmt.Errorf("Ollama did not stop: %w", err)
+		}
 	}
 	if err := exec.CommandContext(ctx, "/usr/bin/open", "-a", "Ollama").Run(); err != nil {
 		return fmt.Errorf("relaunch Ollama: %w", err)

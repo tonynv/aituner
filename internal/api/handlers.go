@@ -386,7 +386,14 @@ func (s *Server) handleTuneApply(w http.ResponseWriter, r *http.Request) {
 				emit(bench.Event{Level: "info", Message: "Waiting for macOS administrator approval (a system dialog is open)"})
 			}
 			if err := s.cfg.Runner.Apply(ctx, c); err != nil {
-				return fmt.Errorf("%s: %w", c.Title, err)
+				// Apply may have changed the system before failing (e.g. env set, restart failed).
+				// Undo it so nothing is left half-applied and unrecorded.
+				emit(bench.Event{Level: "warn", Message: "Apply failed; rolling back " + c.Title})
+				if rerr := s.cfg.Runner.Revert(context.WithoutCancel(ctx), c); rerr != nil {
+					emit(bench.Event{Level: "error", Message: "Rollback also failed: " + rerr.Error()})
+					return fmt.Errorf("%s: %w (rollback failed: %v)", c.Title, err, rerr)
+				}
+				return fmt.Errorf("%s: %w (rolled back)", c.Title, err)
 			}
 			if _, err := s.tn.AddTuneChange(ctx, runID, c.Key, c.Before, c.After); err != nil {
 				return err

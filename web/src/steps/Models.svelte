@@ -119,9 +119,8 @@
   .warn { color: var(--warn); display: flex; gap: 8px; align-items: center; }
   .small { font-size: 13px; }
   .cmd { display: flex; gap: 8px; align-items: stretch; }
-  .cmd pre { flex: 1; margin: 0; padding: 8px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); overflow-x: auto; white-space: pre; }
+  .cmd pre { flex: 1; margin: 0; padding: 8px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); white-space: pre-wrap; overflow-wrap: anywhere; }
   .variant { border-top: 1px solid var(--border); padding-top: 12px; gap: 8px; }
   .repo { word-break: break-all; }
-  summary { cursor: pointer; min-height: 28px; }
   ul { padding-left: 18px; margin: 10px 0 0; display: grid; gap: 6px; }
 </style>

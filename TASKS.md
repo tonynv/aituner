@@ -1,23 +1,25 @@
 # TASKS
 
-Legend: [x] done, [~] in progress, [ ] next. Build order: DataStore → API → UI.
+Legend: [x] done, [~] partial, [ ] not done. Build order: DataStore -> API -> UI.
 
 ## Research / design
 - [x] Clone repo (was empty), probe reference hardware and toolchain
-- [x] Verify canirun.ai API (live), mlx-lm benchmark interface, Ollama env vars + stats fields, HF MLX API
-- [x] SPEC written (SPECS/SPEC.md)
+- [x] Verify canirun.ai API (live), mlx-lm benchmark interface, Ollama env vars + stats fields, HF MLX API, mflux
+- [x] SPEC written and pushed (SPECS/SPEC.md), updated to reality after build
 
-## Build
-- [ ] T1 Go module, store (SQLite, migrations, tenant-scoped repo) + isolation tests
-- [ ] T2 platform interface + darwin detect (hardware, runtimes, thermal, wired limit)
-- [ ] T3 API server: auth/host/origin middleware, phase gate, SSE, /hardware
-- [ ] T4 benchmark suites (mem bw, MLX GPU, MLX LLM, Ollama LLM) + runtime setup
-- [ ] T5 tuning engine (wired limit, persist daemon, Ollama env) + diff/apply/revert
-- [ ] T6 canirun + HF clients, recommendation pipeline (post-tune only)
-- [ ] T7 Svelte UI (5 steps, dark/light, PWA, mobile)
-- [ ] T8 Bubble Tea TUI + run_aituner.sh preflight
-- [ ] T9 End-to-end run on this Mac; Playwright UI QA (dark/light/mobile)
-- [ ] T10 Linux implementation (future)
+## Build (branch build/v0.1)
+- [x] T1 Datastore: SQLite, migrations, tenant-scoped repo, phase state machine + isolation tests
+- [x] T2 Platform interface + macOS detection (hardware, runtimes, thermal, wired limit); real-capture fixture + live test
+- [x] T3 API: token/Host/Origin/CSP, phase gates, single-job runner + SSE, crash recovery (12+ tests)
+- [x] T4 Benchmarks: CPU memory (Go), GPU + LLM (MLX), Ollama; comparison with noise band; runtime setup
+- [x] T5 Tuning: measured plan, per-change opt-in, hardened admin runner, verified apply/revert, rollback on failure
+- [x] T6 canirun.ai + Hugging Face clients, recommendation pipeline (MLX resolution, arch gate, calibrated speed, unrestricted variants)
+- [x] T7 Svelte 5 PWA: 5 steps, dark/light, diff review, comparison, recommendations, mobile
+- [x] T8 Bubble Tea v2 TUI + run_aituner.sh preflight
+- [~] T9 End-to-end on this Mac: full flow verified in Chrome (Playwright) incl. real benchmark, real Ollama tune apply + revert,
+      light and dark, 390px mobile. NOT verified: admin-approved wired-limit apply (needs a human at the dialog).
+- [ ] T10 Linux implementation
+- [ ] Release gates (manager / UI-UX / security / QA agents) not run: no release requested
 
 ## Open
-- D1 RLS deviation sign-off; image-gen runtime choice [TBD]
+- D1 RLS deviation sign-off; PWA install + offline shell not exercised in a real install; Ollama env persistence
