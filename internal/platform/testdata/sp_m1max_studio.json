@@ -1,0 +1,70 @@
+{
+ "SPDisplaysDataType": [
+  {
+   "_name": "Apple M1 Max",
+   "spdisplays_mtlgpufamilysupport": "spdisplays_metal4",
+   "spdisplays_ndrvs": [
+    {
+     "_name": "DELL U4320Q",
+     "_spdisplays_display-product-id": "41d8",
+     "_spdisplays_display-serial-number": "3939344c",
+     "_spdisplays_display-vendor-id": "10ac",
+     "_spdisplays_display-week": "47",
+     "_spdisplays_display-year": "2020",
+     "_spdisplays_displayID": "1",
+     "_spdisplays_pixels": "6400 x 3600",
+     "_spdisplays_resolution": "3200 x 1800 @ 60.00Hz",
+     "spdisplays_main": "spdisplays_yes",
+     "spdisplays_mirror": "spdisplays_off",
+     "spdisplays_online": "spdisplays_yes",
+     "spdisplays_pixelresolution": "6400 x 3600",
+     "spdisplays_resolution": "3200 x 1800 @ 60.00Hz",
+     "spdisplays_rotation": "spdisplays_supported",
+     "spdisplays_television": "spdisplays_yes"
+    },
+    {
+     "_name": "DELL U2419HC",
+     "_spdisplays_display-product-id": "419b",
+     "_spdisplays_display-serial-number": "37303657",
+     "_spdisplays_display-vendor-id": "10ac",
+     "_spdisplays_display-week": "10",
+     "_spdisplays_display-year": "2020",
+     "_spdisplays_displayID": "5",
+     "_spdisplays_pixels": "1080 x 1920",
+     "_spdisplays_resolution": "1080 x 1920 @ 60.00Hz",
+     "spdisplays_mirror": "spdisplays_off",
+     "spdisplays_online": "spdisplays_yes",
+     "spdisplays_pixelresolution": "1080 x 1920",
+     "spdisplays_resolution": "1080 x 1920 @ 60.00Hz",
+     "spdisplays_rotation": 270
+    }
+   ],
+   "spdisplays_vendor": "sppci_vendor_Apple",
+   "sppci_bus": "spdisplays_builtin",
+   "sppci_cores": "24",
+   "sppci_device_type": "spdisplays_gpu",
+   "sppci_model": "Apple M1 Max"
+  }
+ ],
+ "SPHardwareDataType": [
+  {
+   "_name": "hardware_overview",
+   "activation_lock_status": "activation_lock_enabled",
+   "boot_rom_version": "18000.120.36",
+   "chip_type": "Apple M1 Max",
+   "machine_model": "Mac13,1",
+   "machine_name": "Mac Studio",
+   "model_number": "MJMV3LL/A",
+   "number_processors": "proc 10:8:2:0",
+   "os_loader_version": "18000.120.36",
+   "physical_memory": "32 GB"
+  }
+ ],
+ "SPMemoryDataType": [
+  {
+   "dimm_manufacturer": "Samsung",
+   "dimm_type": "LPDDR5",
+   "SPMemoryDataType": "32 GB"
+  }
+ ]
+}
