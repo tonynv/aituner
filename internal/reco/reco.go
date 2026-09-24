@@ -147,9 +147,10 @@ func (e *Engine) info(ctx context.Context, id string) (hf.Info, error) {
 // Estimate predicts generation tok/s from measured bandwidth: tok/s = eff * BW / bytes read per token,
 // where eff is calibrated so the benchmark model reproduces its own measured speed.
 func Estimate(in Input, sizeBytes int64, activeFrac float64) (tps, eff float64) {
-	if in.GPUBandwidthGBs <= 0 || in.MLXGenTPS <= 0 || in.BenchModelBytes <= 0 || sizeBytes <= 0 {
-		return 0, 0
+	if in.GPUBandwidthGBs <= 0 || in.MLXGenTPS <= 0 || in.BenchModelBytes <= 0 || sizeBytes <= 0 || !(activeFrac > 0) {
+		return 0, 0 // not enough measured data, or a nonsensical fraction (also catches NaN): no estimate
 	}
+	activeFrac = math.Min(activeFrac, 1)
 	eff = in.MLXGenTPS * float64(in.BenchModelBytes) / (in.GPUBandwidthGBs * 1e9)
 	eff = math.Min(1, math.Max(0.1, eff))
 	bytesPerTok := float64(sizeBytes) * activeFrac
