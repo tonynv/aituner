@@ -102,7 +102,7 @@
   .bad { color: var(--bad); }
   .summary { gap: 10px; }
   dialog { background: var(--surface); color: var(--text); border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 20px; max-width: min(520px, calc(100vw - 32px)); }
-  dialog::backdrop { background: rgb(0 0 0 / 0.6); }
+  dialog::backdrop { background: var(--overlay); }
   dialog ul { padding-left: 18px; margin: 12px 0 20px; display: grid; gap: 8px; }
   .end { justify-content: flex-end; }
 </style>

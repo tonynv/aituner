@@ -15,6 +15,6 @@
 </div>
 
 <style>
-  .log { border: 1px solid var(--border); background: var(--surface); border-radius: var(--radius); padding: 12px; max-height: 260px; overflow: auto; font-size: 12.5px; line-height: 1.6; }
+  .log { border: 1px solid var(--border); background: var(--surface); border-radius: var(--radius); padding: 12px; max-height: 260px; overflow: auto; font-size: 13px; line-height: 1.6; }
   .warn { color: var(--warn); } .error { color: var(--bad); } .trial { color: var(--muted); }
 </style>

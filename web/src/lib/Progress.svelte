@@ -10,6 +10,6 @@
 
 <style>
   .wrap { display: flex; align-items: center; gap: 12px; }
-  .bar { flex: 1; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+  .bar { flex: 1; height: 4px; background: var(--border); border-radius: var(--radius); overflow: hidden; }
   .fill { height: 100%; background: var(--text); transition: width 0.4s ease; }
 </style>

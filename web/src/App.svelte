@@ -17,18 +17,24 @@
     { n: 5, label: 'Models' },
   ];
   let theme = $state('system');
+  let systemDark = $state(true);
 
   onMount(() => {
     try { const t = localStorage.getItem('aituner-theme'); if (t === 'dark' || t === 'light') theme = t; } catch { /* storage blocked */ }
-    return start();
+    const mq = matchMedia('(prefers-color-scheme: dark)');
+    systemDark = mq.matches;
+    const onChange = (e) => (systemDark = e.matches);
+    mq.addEventListener('change', onChange);
+    const stop = start();
+    return () => { mq.removeEventListener('change', onChange); stop(); };
   });
   $effect(() => {
     const root = document.documentElement;
     if (theme === 'system') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', theme);
   });
-  const isDark = () => (theme === 'system' ? matchMedia('(prefers-color-scheme: dark)').matches : theme === 'dark');
+  const dark = $derived(theme === 'system' ? systemDark : theme === 'dark');
   function toggleTheme() {
-    theme = isDark() ? 'light' : 'dark';
+    theme = dark ? 'light' : 'dark';
     try { localStorage.setItem('aituner-theme', theme); } catch { /* storage blocked */ }
   }
 
@@ -44,7 +50,7 @@
     <div class="brand"><Icon name="gauge" size={20} /><h1>aituner</h1>{#if machine}<span class="muted machine">{machine}</span>{/if}</div>
     <div class="row">
       {#if st?.phase === 'tuned_done'}<button class="btn small" onclick={() => act(() => api.newRun()).then(() => (app.view = null))}><Icon name="refresh" size={14} /> New run</button>{/if}
-      <button class="btn small" onclick={toggleTheme} aria-label="Toggle dark and light theme"><Icon name={isDark() ? 'sun' : 'moon'} size={16} /></button>
+      <button class="btn small" onclick={toggleTheme} aria-label="Toggle dark and light theme"><Icon name={dark ? 'sun' : 'moon'} size={16} /></button>
     </div>
   </header>
 
