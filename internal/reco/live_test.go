@@ -52,3 +52,37 @@ func TestLiveRecommend(t *testing.T) {
 		t.Fatal("no coding recommendations")
 	}
 }
+
+func TestLiveKVForRecommendations(t *testing.T) {
+	if os.Getenv("AITUNER_LIVE") != "1" {
+		t.Skip("set AITUNER_LIVE=1")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	e := &Engine{CanIRun: canirun.New(), HF: hf.New()}
+	out, err := e.Recommend(ctx, Input{
+		Hardware:    canirun.Hardware{CPU: &canirun.CPU{Name: "Apple M1 Max", Cores: 10}, RAMGb: 32, GPU: &canirun.GPU{Name: "Apple M1 Max"}},
+		BudgetBytes: int64(25) << 30, GPUBandwidthGBs: 355, MLXGenTPS: 129.6, BenchModelBytes: 1_824_825_759, Unrestricted: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	known, unknown := 0, 0
+	for _, cat := range []string{"code", "chat"} {
+		for _, c := range out.Groups[cat] {
+			if c.KV == nil {
+				t.Fatalf("%s has no KV fit", c.Name)
+			}
+			if c.KV.Known {
+				known++
+			} else {
+				unknown++
+			}
+			t.Logf("%-26s weights %.1fGB room %.1fGB  fp16 %7d tok  8bit %7d tok  (model max %d) known=%v %s", c.Name, c.KV.WeightsGB, c.KV.RoomGB, c.KV.TokensF16, c.KV.Tokens8Bit, c.KV.MaxContext, c.KV.Known, c.KV.Reason)
+		}
+	}
+	if known == 0 {
+		t.Fatal("no model produced a KV estimate")
+	}
+	t.Logf("known=%d unknown=%d", known, unknown)
+}

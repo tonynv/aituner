@@ -62,6 +62,7 @@ type Variant struct {
 	EstTPS       float64  `json:"est_tps"`
 	Warnings     []string `json:"warnings"`
 	Run          string   `json:"run"`
+	KV           *KVFit   `json:"kv,omitempty"`
 }
 
 type Candidate struct {
@@ -85,6 +86,7 @@ type Candidate struct {
 	Notes     []string  `json:"notes,omitempty"`
 	Installed bool      `json:"installed"`
 	Variants  []Variant `json:"variants,omitempty"`
+	KV        *KVFit    `json:"kv,omitempty"`
 	SourceURL string    `json:"source_url"`
 }
 
@@ -142,6 +144,31 @@ func (e *Engine) search(ctx context.Context, o hf.SearchOpts) ([]hf.Repo, error)
 
 func (e *Engine) info(ctx context.Context, id string) (hf.Info, error) {
 	return cached(ctx, e.Cache, "hf.info|"+id, func() (hf.Info, error) { return e.HF.Info(ctx, id) })
+}
+
+// kvFit places a repo's weights in the budget and computes the remaining KV cache room from its real config.
+// A missing or unparseable config yields an "unknown" fit with the reason, never a guess.
+func (e *Engine) kvFit(ctx context.Context, repo string, weights, budget int64) *KVFit {
+	unknown := func(why string) *KVFit {
+		f, err := KVProfile{Reason: why}.Fit(weights, budget)
+		if err != nil {
+			return nil
+		}
+		return &f
+	}
+	raw, err := cached(ctx, e.Cache, "hf.config|"+repo, func() (json.RawMessage, error) { return e.HF.Config(ctx, repo) })
+	if err != nil {
+		return unknown("model config could not be read")
+	}
+	p, err := KVFromConfig(raw)
+	if err != nil {
+		return unknown("model config could not be parsed")
+	}
+	f, err := p.Fit(weights, budget)
+	if err != nil {
+		return nil
+	}
+	return &f
 }
 
 // Estimate predicts generation tok/s from measured bandwidth: tok/s = eff * BW / bytes read per token,
@@ -339,6 +366,7 @@ func (e *Engine) resolve(ctx context.Context, in Input, cat string, rec canirun.
 		if c.Run = MLXChatCommand(in.MLXBinDir, q.Repo.ID); c.Run == "" {
 			continue
 		}
+		c.KV = e.kvFit(ctx, q.Repo.ID, size, in.BudgetBytes)
 		if active > 0 {
 			c.Notes = append(c.Notes, "Mixture-of-experts: only a fraction of weights is read per token, so it can be far faster than its size suggests (estimate ignores routing overhead).")
 		}
@@ -430,6 +458,7 @@ func (e *Engine) variants(ctx context.Context, in Input, c Candidate) []Variant 
 		if tps, _ := Estimate(in, size, frac); tps > 0 {
 			v.EstTPS = tps
 		}
+		v.KV = e.kvFit(ctx, r.ID, size, in.BudgetBytes)
 		if strings.Contains(strings.ToLower(r.Name()), "vlm") {
 			v.Warnings = append(v.Warnings, "Built for mlx-vlm (vision-language); it may not load with mlx_lm.chat.")
 		}

@@ -3,6 +3,7 @@ package hf
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"path"
@@ -123,5 +124,16 @@ func (i Info) PickleOnly() bool {
 func (c *Client) Info(ctx context.Context, id string) (Info, error) {
 	var out Info
 	err := c.HTTP.JSON(ctx, "GET", c.Base+"/api/models/"+id+"?blobs=true", nil, &out)
+	return out, err
+}
+
+// Config fetches a repo's config.json (small, public, not LFS). The repo id must already be validated.
+func (c *Client) Config(ctx context.Context, id string) (json.RawMessage, error) {
+	parts := strings.SplitN(id, "/", 2)
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("bad repo id %q", id)
+	}
+	var out json.RawMessage
+	err := c.HTTP.JSON(ctx, "GET", c.Base+"/"+url.PathEscape(parts[0])+"/"+url.PathEscape(parts[1])+"/resolve/main/config.json", nil, &out)
 	return out, err
 }
