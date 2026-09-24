@@ -17,6 +17,12 @@
     { n: 5, label: 'Models' },
   ];
   let theme = $state('system');
+  let newRunDialog;
+  async function confirmNewRun() {
+    newRunDialog?.close();
+    await act(() => api.newRun());
+    app.view = null;
+  }
   let systemDark = $state(true);
 
   onMount(() => {
@@ -49,7 +55,7 @@
   <header>
     <div class="brand"><Icon name="gauge" size={20} /><h1>aituner</h1>{#if machine}<span class="muted machine">{machine}</span>{/if}</div>
     <div class="row">
-      {#if st?.phase === 'tuned_done'}<button class="btn small" onclick={() => act(() => api.newRun()).then(() => (app.view = null))}><Icon name="refresh" size={14} /> New run</button>{/if}
+      {#if st?.phase === 'tuned_done'}<button class="btn small" onclick={() => newRunDialog.showModal()}><Icon name="refresh" size={14} /> New run</button>{/if}
       <button class="btn small" onclick={toggleTheme} aria-label="Toggle dark and light theme"><Icon name={dark ? 'sun' : 'moon'} size={16} /></button>
     </div>
   </header>
@@ -86,6 +92,15 @@
   {/if}
 </div>
 
+<dialog bind:this={newRunDialog} aria-labelledby="nr-title">
+  <h3 id="nr-title">Start a new run?</h3>
+  <p class="muted">This starts over from the hardware step. The current results stay saved, but the model recommendations lock again until you benchmark, tune and re-run.</p>
+  <div class="row end">
+    <button class="btn" onclick={() => newRunDialog.close()}>Keep current results</button>
+    <button class="btn primary" onclick={confirmNewRun}>Start new run</button>
+  </div>
+</dialog>
+
 <style>
   .shell { max-width: 1040px; margin: 0 auto; padding: 0 var(--gutter) 48px; }
   header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 0; border-bottom: 1px solid var(--border); }
@@ -100,5 +115,9 @@
   .step .num { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: 1px solid currentColor; border-radius: var(--radius); font-size: 12px; font-variant-numeric: tabular-nums; }
   .step.done .num { background: var(--btn-bg); color: var(--btn-fg); border-color: var(--btn-bg); }
   main { padding-top: 4px; }
+  dialog { background: var(--surface); color: var(--text); border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 20px; max-width: min(520px, calc(100vw - 32px)); }
+  dialog::backdrop { background: var(--overlay); }
+  dialog p { margin: 10px 0 20px; }
+  .end { justify-content: flex-end; }
   @media (max-width: 560px) { .machine { display: none; } .lbl { font-size: 14px; } }
 </style>
