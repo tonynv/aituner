@@ -48,6 +48,7 @@ type Input struct {
 	Installed       []string // installed Ollama model names, for marking
 	// SupportedModelTypes is what the installed mlx-lm can load (from the MLX probe). Empty = unchecked.
 	SupportedModelTypes map[string]bool
+	MLXBinDir           string // venv bin directory, for absolute command paths
 }
 
 type Variant struct {
@@ -334,7 +335,9 @@ func (e *Engine) resolve(ctx context.Context, in Input, cat string, rec canirun.
 		if tps, _ := Estimate(in, size, frac); tps > 0 {
 			c.EstTPS = tps
 		}
-		c.Run = "mlx_lm.chat --model " + q.Repo.ID
+		if c.Run = MLXChatCommand(in.MLXBinDir, q.Repo.ID); c.Run == "" {
+			continue
+		}
 		if active > 0 {
 			c.Notes = append(c.Notes, "Mixture-of-experts: only a fraction of weights is read per token, so it can be far faster than its size suggests (estimate ignores routing overhead).")
 		}
@@ -359,7 +362,7 @@ func (e *Engine) resolveImage(in Input, c Candidate, rec canirun.Recommendation)
 	}
 	c.Runtime, c.SizeGB, c.Fit = "mflux", rec.VRAMRequiredGb, fit
 	c.Repo = BaseName(rec.URL)
-	c.Run = "uv tool install --upgrade mflux"
+	c.Run = "brew install uv   # if you do not have uv\nuv tool install --upgrade mflux"
 	if strings.Contains(id, "z-image-turbo") {
 		c.Run += "\nmflux-generate-z-image-turbo --prompt \"...\" --steps 9 -q 8"
 	}
@@ -409,7 +412,7 @@ func (e *Engine) variants(ctx context.Context, in Input, c Candidate) []Variant 
 			break
 		}
 		inf, err := e.info(ctx, r.ID)
-		if err != nil || inf.PickleOnly() || inf.SafetensorsBytes() == 0 || inf.IsGated() || !in.supports(inf.Config.ModelType) {
+		if err != nil || !ValidRepo(r.ID) || inf.PickleOnly() || inf.SafetensorsBytes() == 0 || inf.IsGated() || !in.supports(inf.Config.ModelType) {
 			continue
 		}
 		size := inf.SafetensorsBytes()
@@ -418,7 +421,7 @@ func (e *Engine) variants(ctx context.Context, in Input, c Candidate) []Variant 
 			continue
 		}
 		v := Variant{Repo: r.ID, Bits: bitsFromName(r.Name()), SizeGB: float64(size) / 1e9, Downloads: r.Downloads, License: inf.License(),
-			LastModified: inf.LastModified, Fit: fit, Run: "mlx_lm.chat --model " + r.ID,
+			LastModified: inf.LastModified, Fit: fit, Run: MLXChatCommand(in.MLXBinDir, r.ID),
 			Warnings: []string{
 				"Community-modified weights (safety tuning removed) from " + r.Author() + ": unaudited, use at your own discretion.",
 				"Safetensors only; loaded without remote code.",

@@ -116,3 +116,26 @@ func ActiveParamsBillions(name string) float64 {
 	}
 	return 0
 }
+
+// repoRe is the shape of a Hugging Face repo id. Repo names come from a third party and end up in a
+// copy-paste shell command, so anything outside this set is rejected, never quoted or escaped.
+var repoRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,95}/[A-Za-z0-9][A-Za-z0-9._-]{0,95}$`)
+
+// ValidRepo reports whether id is safe to place on a command line.
+func ValidRepo(id string) bool { return repoRe.MatchString(id) && !strings.Contains(id, "..") }
+
+// shellQuote single-quotes s for a POSIX shell.
+func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
+
+// MLXChatCommand builds the command to chat with an MLX repo using the aituner venv's mlx_lm.
+// binDir may be empty (then the bare command name is used). It returns "" for an unsafe repo id.
+func MLXChatCommand(binDir, repo string) string {
+	if !ValidRepo(repo) {
+		return ""
+	}
+	exe := "mlx_lm.chat"
+	if binDir != "" {
+		exe = shellQuote(binDir + "/mlx_lm.chat")
+	}
+	return exe + " --model " + repo
+}

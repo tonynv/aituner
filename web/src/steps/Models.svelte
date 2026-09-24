@@ -107,7 +107,7 @@
       </details>
     {/if}
     {#if data.warnings?.length}{#each data.warnings as w}<p class="warn"><Icon name="alert" size={14} /> {w}</p>{/each}{/if}
-    <p class="faint small">Sources: {data.sources.join('; ')}. Install commands need the mlx-lm environment aituner created (see ~/Library/Application Support/aituner/venv/bin).</p>
+    <p class="faint small">Sources: {data.sources.join('; ')}. Commands use the mlx-lm environment aituner created; the first run downloads the model.</p>
   {/if}
 </div>
 

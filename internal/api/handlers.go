@@ -529,6 +529,7 @@ func (s *Server) handleRecommendations(w http.ResponseWriter, r *http.Request) {
 	if in.BudgetBytes > hw.Memory.TotalBytes {
 		in.BudgetBytes = hw.Memory.TotalBytes
 	}
+	in.MLXBinDir = filepath.Join(hw.Software.MLX.VenvPath, "bin")
 	in.SupportedModelTypes = map[string]bool{}
 	for _, t := range probe.SupportedModelTypes {
 		in.SupportedModelTypes[t] = true

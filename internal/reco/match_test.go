@@ -135,3 +135,32 @@ func TestSupportsGate(t *testing.T) {
 		t.Fatal("unchecked input must not block")
 	}
 }
+
+func TestValidRepoRejectsShellMetacharacters(t *testing.T) {
+	good := []string{"mlx-community/Qwen3-8B-4bit", "a/b", "org.name/model_v1.2-x"}
+	bad := []string{"", "noslash", "a/b; rm -rf ~", "a/b$(id)", "a/b`id`", "a/b c", "a/b\nrm", "../../etc/passwd", "a/../b", "a/b'c", "a/b\"c", "a/b|c", "a/b&c", "-x/y", "a/-y/z", "a/b>c"}
+	for _, g := range good {
+		if !ValidRepo(g) {
+			t.Errorf("rejected %q", g)
+		}
+	}
+	for _, b := range bad {
+		if ValidRepo(b) {
+			t.Errorf("accepted %q", b)
+		}
+	}
+}
+
+func TestMLXChatCommand(t *testing.T) {
+	if got := MLXChatCommand("", "mlx-community/X-4bit"); got != "mlx_lm.chat --model mlx-community/X-4bit" {
+		t.Fatal(got)
+	}
+	got := MLXChatCommand("/Users/o'brien/Library/Application Support/aituner/venv/bin", "mlx-community/X-4bit")
+	want := `'/Users/o'\''brien/Library/Application Support/aituner/venv/bin/mlx_lm.chat' --model mlx-community/X-4bit`
+	if got != want {
+		t.Fatalf("got  %s\nwant %s", got, want)
+	}
+	if MLXChatCommand("", "a/b; rm -rf ~") != "" {
+		t.Fatal("unsafe repo must yield no command")
+	}
+}
