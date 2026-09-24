@@ -1,19 +1,40 @@
 <script>
+  import { onMount } from 'svelte';
   import Icon from '../lib/Icon.svelte';
+  import ModelEntry from '../lib/ModelEntry.svelte';
   import { api } from '../lib/api.js';
+  import { fmtBytes } from '../lib/format.js';
 
   let { st } = $props();
   let data = $state(null);
   let err = $state('');
   let loading = $state(false);
   let unrestricted = $state(true);
-  let copied = $state('');
+  let layout = $state('grid');
+
+  // downloads + folder setting
+  let dl = $state({});
+  let anyActive = $state(false);
+  let settings = $state(null);
+  let editing = $state(false);
+  let draft = $state('');
+  let folderErr = $state('');
+  let saving = $state(false);
 
   const CATS = [
     { key: 'code', title: 'Coding', icon: 'code' },
     { key: 'chat', title: 'Chat and reasoning', icon: 'chat' },
     { key: 'image', title: 'Image generation', icon: 'image' },
   ];
+  const blocked = $derived(!!st.job?.running);
+
+  onMount(() => {
+    try { const v = localStorage.getItem('aituner-view'); if (v === 'list' || v === 'grid') layout = v; } catch { /* storage blocked */ }
+  });
+  function setLayout(v) {
+    layout = v;
+    try { localStorage.setItem('aituner-view', v); } catch { /* storage blocked */ }
+  }
 
   async function load() {
     loading = true; err = '';
@@ -21,79 +42,132 @@
   }
   $effect(() => { if (st.recommendations_unlocked && !data && !loading && !err) load(); });
 
-  async function copy(text) {
-    try { await navigator.clipboard.writeText(text); copied = text; setTimeout(() => (copied = ''), 1500); } catch { /* clipboard unavailable */ }
+  async function refreshDownloads() {
+    try {
+      const r = await api.downloads();
+      dl = Object.fromEntries(r.items.map((i) => [i.repo, i]));
+      anyActive = r.active;
+    } catch { /* keep the last known state; the shell shows connection problems */ }
   }
+  async function loadSettings() { try { settings = await api.settings(); } catch { /* shown by the shell */ } }
+
+  $effect(() => {
+    if (!st.recommendations_unlocked) return;
+    loadSettings();
+    refreshDownloads();
+    let stop = false, t;
+    const tick = async () => { await refreshDownloads(); if (!stop) t = setTimeout(tick, anyActive ? 1000 : 5000); };
+    t = setTimeout(tick, 1000);
+    return () => { stop = true; clearTimeout(t); };
+  });
+
+  function edit() { draft = settings?.models_dir ?? ''; folderErr = ''; editing = true; }
+  async function saveFolder(value) {
+    saving = true; folderErr = '';
+    try { settings = await api.setModelsDir(value); editing = false; await refreshDownloads(); } catch (e) { folderErr = e.message; } finally { saving = false; }
+  }
+
   const gradeClass = (g) => (g === 'S' || g === 'A' ? 'ok' : g === 'B' || g === 'C' ? '' : 'warn');
   const bitsLabel = (b) => (b ? `${b}-bit` : 'quant unknown');
+  const fit = (f) => ({ text: f === 'comfortable' ? 'fits comfortably' : 'tight fit', cls: f === 'comfortable' ? 'ok' : 'warn' });
+
+  function candidate(m) {
+    const badges = [{ text: m.runtime === 'mlx' ? `MLX ${bitsLabel(m.bits)}` : 'MLX (mflux)' }, fit(m.fit), { text: `${m.size_gb.toFixed(1)} GB` }];
+    if (m.est_tps) badges.push({ text: `~${Math.round(m.est_tps)} tok/s` });
+    if (m.installed) badges.push({ text: 'already in Ollama', cls: 'ok' });
+    return {
+      title: m.name, subtitle: `${m.provider}, ${m.active_b ? `${m.params_b}B (${m.active_b}B active)` : `${m.params_b}B`}`,
+      grade: m.grade, gradeClass: gradeClass(m.grade), badges, notes: m.notes, kv: m.kv,
+      repo: m.runtime === 'mlx' ? m.repo : '', run: m.run, runLabel: m.runtime === 'mlx' ? 'Run without downloading first' : 'Install and run with mflux', sourceUrl: m.source_url,
+    };
+  }
+  function variant(v) {
+    const badges = [{ text: bitsLabel(v.bits) }, { text: `${v.size_gb.toFixed(1)} GB` }, { text: v.fit === 'comfortable' ? 'fits' : 'tight', cls: v.fit === 'comfortable' ? 'ok' : 'warn' }];
+    if (v.est_tps) badges.push({ text: `~${Math.round(v.est_tps)} tok/s` });
+    badges.push({ text: `${v.downloads.toLocaleString()} downloads` });
+    if (v.license) badges.push({ text: v.license });
+    return { title: v.repo, mono: true, badges, notes: v.warnings, kv: v.kv, repo: v.repo, run: v.run, runLabel: 'Run without downloading first' };
+  }
 </script>
 
 <div class="stack">
-  <div class="row between">
+  <div class="row between head">
     <div>
       <h2>What this machine can run</h2>
       <p class="muted">Sized to your tuned memory, ranked by canirun.ai fit, resolved to Apple-Silicon (MLX) builds that actually load here, with speeds calibrated to what you measured.</p>
     </div>
-    <label class="toggle">
-      <input type="checkbox" bind:checked={unrestricted} onchange={() => { data = null; load(); }} />
-      <span>Include unrestricted variants</span>
-    </label>
+    <div class="row controls">
+      <div class="seg" role="group" aria-label="Layout">
+        <button class:on={layout === 'grid'} onclick={() => setLayout('grid')} aria-pressed={layout === 'grid'} aria-label="Grid view"><Icon name="grid" size={16} /> Grid</button>
+        <button class:on={layout === 'list'} onclick={() => setLayout('list')} aria-pressed={layout === 'list'} aria-label="List view"><Icon name="list" size={16} /> List</button>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" bind:checked={unrestricted} onchange={() => { data = null; load(); }} />
+        <span>Include unrestricted variants</span>
+      </label>
+    </div>
   </div>
+
+  {#if settings}
+    <section class="card folder" aria-label="Download folder">
+      <div class="row between">
+        <div class="row where">
+          <Icon name="folder" />
+          <div class="path-info">
+            <div class="muted small">Downloads are saved to</div>
+            {#if editing}
+              <input class="path" bind:value={draft} spellcheck="false" autocomplete="off" aria-label="Models folder path" onkeydown={(e) => e.key === 'Enter' && saveFolder(draft)} />
+            {:else}
+              <div class="mono path-text">{settings.models_dir || 'not set'}</div>
+              {#if settings.info?.path}<div class="faint small">{fmtBytes(settings.info.free_bytes)} free on this volume{settings.is_default ? ', default folder' : ''}</div>{/if}
+            {/if}
+          </div>
+        </div>
+        <div class="row">
+          {#if editing}
+            <button class="btn small primary" onclick={() => saveFolder(draft)} disabled={saving}>Save</button>
+            <button class="btn small" onclick={() => saveFolder('')} disabled={saving}>Use default</button>
+            <button class="btn small" onclick={() => (editing = false)} disabled={saving}>Cancel</button>
+          {:else}
+            <button class="btn small" onclick={edit} disabled={anyActive}>Change folder</button>
+          {/if}
+        </div>
+      </div>
+      {#if settings.problem}<p class="bad small" role="alert">{settings.problem}</p>{/if}
+      {#if folderErr}<p class="bad small" role="alert">{folderErr}</p>{/if}
+      {#if editing}<p class="faint small">A folder inside your home directory or on an external drive (/Volumes). It is created if it does not exist.</p>{/if}
+    </section>
+  {/if}
 
   {#if loading}<p class="muted">Asking canirun.ai and Hugging Face</p>{/if}
   {#if err}<p class="bad" role="alert"><Icon name="alert" size={16} /> {err} <button class="btn small" onclick={load}>Retry</button></p>{/if}
 
   {#if data}
     <p class="muted">
-      Memory budget {data.budget_gb.toFixed(1)} GB. Speed estimate = measured bandwidth scaled to each model's size (calibration {Math.round(data.efficiency * 100)}%). These are estimates; MoE speeds ignore routing overhead.
+      Memory budget {data.budget_gb.toFixed(1)} GB. Speed estimate = measured bandwidth scaled to each model's size (calibration {Math.round(data.efficiency * 100)}%). The bar under each model shows how that budget is used once it loads, and how much KV cache (context) still fits. Estimates only; MoE speeds ignore routing overhead.
     </p>
     {#each CATS as c}
       {#if data.groups[c.key]?.length}
         <section class="stack">
           <div class="row"><Icon name={c.icon} /><h3>{c.title}</h3>
             {#if data.skipped[c.key]}<span class="faint">{data.skipped[c.key]} more ranked by canirun.ai were skipped</span>{/if}</div>
-          <div class="grid">
-            {#each data.groups[c.key] as m (m.model_id)}
-              <article class="card stack">
-                <div class="row between">
-                  <div><h3>{m.name}</h3><div class="faint">{m.provider}{m.active_b ? `, ${m.params_b}B (${m.active_b}B active)` : `, ${m.params_b}B`}</div></div>
-                  <span class="badge {gradeClass(m.grade)}" title="canirun.ai fit grade">grade {m.grade}</span>
-                </div>
-                <div class="row">
-                  <span class="badge">{m.runtime === 'mlx' ? `MLX ${bitsLabel(m.bits)}` : 'MLX (mflux)'}</span>
-                  <span class="badge {m.fit === 'comfortable' ? 'ok' : 'warn'}">{m.fit === 'comfortable' ? 'fits comfortably' : 'tight fit'}</span>
-                  <span class="badge">{m.size_gb.toFixed(1)} GB</span>
-                  {#if m.est_tps}<span class="badge">~{Math.round(m.est_tps)} tok/s</span>{/if}
-                  {#if m.installed}<span class="badge ok">already in Ollama</span>{/if}
-                </div>
-                {#if m.notes?.length}{#each m.notes as n}<p class="muted small">{n}</p>{/each}{/if}
-                <div class="cmd">
-                  <pre class="mono">{m.run}</pre>
-                  <button class="btn small" onclick={() => copy(m.run)} aria-label="Copy command"><Icon name={copied === m.run ? 'check' : 'copy'} size={14} /></button>
-                </div>
-                {#if m.variants?.length}
-                  <details>
-                    <summary>{m.variants.length} unrestricted variant{m.variants.length > 1 ? 's' : ''}</summary>
-                    <div class="stack" style="margin-top:12px">
-                      {#each m.variants as v (v.repo)}
-                        <div class="variant stack">
-                          <div class="mono repo">{v.repo}</div>
-                          <div class="row">
-                            <span class="badge">{bitsLabel(v.bits)}</span><span class="badge">{v.size_gb.toFixed(1)} GB</span>
-                            <span class="badge {v.fit === 'comfortable' ? 'ok' : 'warn'}">{v.fit === 'comfortable' ? 'fits' : 'tight'}</span>
-                            {#if v.est_tps}<span class="badge">~{Math.round(v.est_tps)} tok/s</span>{/if}
-                            <span class="badge">{v.downloads.toLocaleString()} downloads</span>
-                            {#if v.license}<span class="badge">{v.license}</span>{/if}
-                          </div>
-                          {#each v.warnings as w}<p class="faint small">{w}</p>{/each}
-                          <div class="cmd"><pre class="mono">{v.run}</pre><button class="btn small" onclick={() => copy(v.run)} aria-label="Copy command"><Icon name={copied === v.run ? 'check' : 'copy'} size={14} /></button></div>
-                        </div>
-                      {/each}
-                    </div>
-                  </details>
-                {/if}
-                <a class="faint small" href={m.source_url} target="_blank" rel="noopener noreferrer">Model page</a>
-              </article>
+          <div class={layout === 'grid' ? 'grid' : 'listwrap'}>
+            {#each data.groups[c.key] as raw (raw.model_id)}
+              {@const m = candidate(raw)}
+              <ModelEntry {m} {layout} {dl} {anyActive} {blocked} onchange={refreshDownloads}>
+                {#snippet children()}
+                  {#if raw.variants?.length}
+                    <details class="variants">
+                      <summary>{raw.variants.length} unrestricted variant{raw.variants.length > 1 ? 's' : ''}</summary>
+                      <div class="vlist">
+                        {#each raw.variants as v (v.repo)}
+                          <ModelEntry m={variant(v)} layout="list" {dl} {anyActive} {blocked} onchange={refreshDownloads} />
+                        {/each}
+                      </div>
+                    </details>
+                  {/if}
+                {/snippet}
+              </ModelEntry>
             {/each}
           </div>
         </section>
@@ -107,20 +181,31 @@
       </details>
     {/if}
     {#if data.warnings?.length}{#each data.warnings as w}<p class="warn"><Icon name="alert" size={14} /> {w}</p>{/each}{/if}
-    <p class="faint small">Sources: {data.sources.join('; ')}. Commands use the mlx-lm environment aituner created; the first run downloads the model.</p>
+    <p class="faint small">Sources: {data.sources.join('; ')}. Downloads fetch weights, config and tokenizer files only, verified file by file. Commands use the mlx-lm environment aituner created.</p>
   {/if}
 </div>
 
 <style>
   .between { justify-content: space-between; align-items: flex-start; }
+  .head { gap: 16px; }
+  .controls { gap: 16px; }
+  .seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: var(--radius); overflow: hidden; }
+  .seg button { display: inline-flex; align-items: center; gap: 6px; min-height: var(--tap); padding: 0 14px; background: transparent; border: 0; cursor: pointer; color: var(--muted); }
+  .seg button + button { border-left: 1px solid var(--border-strong); }
+  .seg button.on { background: var(--btn-bg); color: var(--btn-fg); }
   .toggle { display: flex; align-items: center; gap: 10px; min-height: var(--tap); cursor: pointer; }
   .toggle input { width: 20px; height: 20px; accent-color: var(--text); }
-  .bad { color: var(--bad); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  .warn { color: var(--warn); display: flex; gap: 8px; align-items: center; }
+  .folder { display: grid; gap: 10px; }
+  .where { align-items: flex-start; flex-wrap: nowrap; min-width: 0; flex: 1; }
+  .path-info { min-width: 0; flex: 1; }
+  .path-text { word-break: break-all; }
+  .path { width: 100%; min-height: var(--tap); padding: 0 12px; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--bg); color: var(--text); font: 13px var(--font-mono); }
   .small { font-size: 13px; }
-  .cmd { display: flex; gap: 8px; align-items: stretch; }
-  .cmd pre { flex: 1; margin: 0; padding: 8px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); white-space: pre-wrap; overflow-wrap: anywhere; }
-  .variant { border-top: 1px solid var(--border); padding-top: 12px; gap: 8px; }
-  .repo { word-break: break-all; }
+  .bad { color: var(--bad); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 0; }
+  .warn { color: var(--warn); display: flex; gap: 8px; align-items: center; }
+  .listwrap { display: block; }
+  .variants summary { min-height: 36px; color: var(--muted); }
+  .vlist { padding-left: 12px; border-left: 1px solid var(--border-strong); margin-top: 6px; }
   ul { padding-left: 18px; margin: 10px 0 0; display: grid; gap: 6px; }
+  @media (max-width: 700px) { .head { flex-direction: column; } }
 </style>

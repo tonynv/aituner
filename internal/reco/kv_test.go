@@ -139,6 +139,19 @@ func TestKVFitSlidingWindowFixedCostComesFirst(t *testing.T) {
 	}
 }
 
+func TestKVFitCarriesEverythingTheMeterNeeds(t *testing.T) {
+	p, _ := KVFromConfig(cfg(t, "gemma-4-26b-a4b-it-4bit"))
+	gib := int64(1 << 30)
+	f, _ := p.Fit(14*gib, 25*gib)
+	// weights + overhead + room must add back up to the budget, or the bar would not be drawn to scale
+	if sum := f.WeightsGB + f.OverheadGB + f.RoomGB; math.Abs(sum-25) > 1e-9 {
+		t.Fatalf("segments sum to %v, budget is 25", sum)
+	}
+	if f.FixedBytes != int64(p.FixedBytes) || f.FixedBytes == 0 || f.BytesPerTok != int64(p.PerTokenBytes) || f.OverheadGB != 1 {
+		t.Fatalf("%+v", f)
+	}
+}
+
 func TestKVFitUnknownStillReportsRoom(t *testing.T) {
 	p, _ := KVFromConfig([]byte(`{"kv_lora_rank":1}`))
 	f, _ := p.Fit(1<<30, 8<<30)

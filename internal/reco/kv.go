@@ -125,6 +125,8 @@ type KVFit struct {
 	Tokens8Bit  int     `json:"tokens_8bit"` // ... with an 8-bit quantised KV cache
 	MaxContext  int     `json:"max_context"` // the model's own limit (0 = unknown)
 	BytesPerTok int64   `json:"bytes_per_token_fp16"`
+	FixedBytes  int64   `json:"fixed_bytes"` // sliding-window layers: constant KV cost once the window is full
+	OverheadGB  float64 `json:"overhead_gb"` // runtime/activation memory kept out of the KV budget
 	Note        string  `json:"note,omitempty"`
 }
 
@@ -154,7 +156,7 @@ func (p KVProfile) Fit(weightsBytes, budgetBytes int64) (KVFit, error) {
 		return KVFit{}, errors.New("budget and weights must be positive")
 	}
 	f := KVFit{Known: p.Known, Reason: p.Reason, MaxContext: p.MaxContext,
-		WeightsGB: float64(weightsBytes) / (1 << 30), BudgetGB: float64(budgetBytes) / (1 << 30)}
+		WeightsGB: float64(weightsBytes) / (1 << 30), BudgetGB: float64(budgetBytes) / (1 << 30), OverheadGB: float64(runtimeOverheadBytes) / (1 << 30)}
 	room := float64(budgetBytes - weightsBytes - runtimeOverheadBytes)
 	if room < 0 {
 		room = 0
@@ -164,6 +166,7 @@ func (p KVProfile) Fit(weightsBytes, budgetBytes int64) (KVFit, error) {
 		return f, nil
 	}
 	f.BytesPerTok = int64(p.PerTokenBytes)
+	f.FixedBytes = int64(p.FixedBytes)
 	f.TokensF16 = tokensFor(room, p, 1)
 	f.Tokens8Bit = tokensFor(room, p, kv8Ratio)
 	if p.OtherLayers > 0 {

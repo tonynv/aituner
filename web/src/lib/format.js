@@ -22,3 +22,13 @@ export const spread = (trials) => {
   const med = s[Math.floor(s.length / 2)];
   return med ? ((s[s.length - 1] - s[0]) / 2 / med) * 100 : 0;
 };
+
+// 262144 -> "262K", 99739 -> "99.7K", 40960 -> "41K"
+export function fmtTokens(n) {
+  if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
+  if (n >= 100_000) return `${Math.round(n / 1000)}K`;
+  if (n >= 1000) return `${(n / 1000).toFixed(n >= 10_000 ? 0 : 1)}K`.replace('.0K', 'K');
+  return String(n);
+}
+export const fmtGB = (v) => `${v >= 10 ? v.toFixed(0) : v.toFixed(1)} GB`;
+export const fmtSpeed = (bps) => (bps >= 1024 ** 2 ? `${(bps / 1024 ** 2).toFixed(0)} MB/s` : `${Math.round(bps / 1024)} KB/s`);

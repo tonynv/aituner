@@ -24,6 +24,11 @@ export const api = {
   tunePlan: () => req('GET', '/api/v1/tune/plan'),
   tuneApply: (keys) => req('POST', '/api/v1/tune/apply', { keys }),
   tuneRevert: () => req('POST', '/api/v1/tune/revert', {}),
+  settings: () => req('GET', '/api/v1/settings'),
+  setModelsDir: (dir) => req('PUT', '/api/v1/settings', { models_dir: dir }),
+  downloads: () => req('GET', '/api/v1/downloads'),
+  startDownload: (repo) => req('POST', '/api/v1/downloads', { repo }),
+  cancelDownload: (repo) => req('POST', '/api/v1/downloads/cancel', { repo }),
   recommendations: (unrestricted) => req('GET', `/api/v1/recommendations?unrestricted=${unrestricted ? 1 : 0}`),
 };
 
