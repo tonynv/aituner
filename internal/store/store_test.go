@@ -161,3 +161,31 @@ func TestMigrationsIdempotent(t *testing.T) {
 		d.Close()
 	}
 }
+
+func TestSettingsAreTenantScopedAndDeletable(t *testing.T) {
+	d := open(t)
+	ctx := context.Background()
+	a, _ := setup(t, d, "a")
+	b, _ := setup(t, d, "b")
+	if err := a.SetSetting(ctx, "models_dir", "/Users/x/Models"); err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := b.GetSetting(ctx, "models_dir"); v != "" {
+		t.Fatalf("b sees a's setting: %q", v)
+	}
+	if v, _ := a.GetSetting(ctx, "models_dir"); v != "/Users/x/Models" {
+		t.Fatalf("a lost its setting: %q", v)
+	}
+	if err := a.SetSetting(ctx, "models_dir", "/Users/x/Other"); err != nil { // upsert
+		t.Fatal(err)
+	}
+	if v, _ := a.GetSetting(ctx, "models_dir"); v != "/Users/x/Other" {
+		t.Fatalf("upsert failed: %q", v)
+	}
+	if err := a.SetSetting(ctx, "models_dir", ""); err != nil { // empty resets to default
+		t.Fatal(err)
+	}
+	if v, _ := a.GetSetting(ctx, "models_dir"); v != "" {
+		t.Fatalf("not deleted: %q", v)
+	}
+}

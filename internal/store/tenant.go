@@ -244,3 +244,25 @@ func (t *Tenant) CacheGet(ctx context.Context, source, key string) (CacheEntry, 
 	e.Body = json.RawMessage(b)
 	return e, err
 }
+
+// SetSetting stores a per-tenant setting; an empty value deletes it (reverting to the default).
+func (t *Tenant) SetSetting(ctx context.Context, key, value string) error {
+	if value == "" {
+		_, err := t.db.ExecContext(ctx, `DELETE FROM settings WHERE tenant_id=? AND key=?`, t.id, key)
+		return err
+	}
+	_, err := t.db.ExecContext(ctx, `
+INSERT INTO settings(tenant_id,key,value,updated_at) VALUES (?,?,?,?)
+ON CONFLICT(tenant_id,key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at`, t.id, key, value, now())
+	return err
+}
+
+// GetSetting returns the value, or "" if unset.
+func (t *Tenant) GetSetting(ctx context.Context, key string) (string, error) {
+	var v string
+	err := t.db.QueryRowContext(ctx, `SELECT value FROM settings WHERE tenant_id=? AND key=?`, t.id, key).Scan(&v)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return v, err
+}
