@@ -63,8 +63,8 @@ func TestCompareUsesNoiseOfBothRuns(t *testing.T) {
 
 // Real measurement on this machine: plausible bounds only (no fixed number is claimed).
 func TestMemBandwidthLive(t *testing.T) {
-	if testing.Short() {
-		t.Skip("short")
+	if testing.Short() || raceEnabled {
+		t.Skip("throughput is not measurable in -short or -race mode")
 	}
 	cp, rd, err := MemBandwidth(context.Background(), 4, 2)
 	if err != nil {
