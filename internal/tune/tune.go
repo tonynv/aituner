@@ -23,6 +23,7 @@ type Env struct {
 	OllamaFlashAttention string // current launchctl value, "" if unset
 	OllamaKVCache        string
 	PersistDaemon        bool // ai.aituner.wiredlimit LaunchDaemon present
+	OllamaAgent          bool // ai.aituner.ollama-env LaunchAgent present
 }
 
 // Change is one proposed modification, shown to the user as a diff before anything is applied.
@@ -66,9 +67,10 @@ func diff(key, before, after string) string {
 }
 
 const (
-	KeyWiredLimit = "gpu.wired_limit"
-	KeyPersist    = "gpu.wired_limit.persist"
-	KeyOllamaEnv  = "ollama.env"
+	KeyWiredLimit    = "gpu.wired_limit"
+	KeyPersist       = "gpu.wired_limit.persist"
+	KeyOllamaEnv     = "ollama.env"
+	KeyOllamaPersist = "ollama.env.persist"
 )
 
 func gib(bytes int64) string { return fmt.Sprintf("%.1f GiB", float64(bytes)/(1<<30)) }
@@ -151,7 +153,23 @@ func (p *Plan) planOllama(env Env) {
 		p.NotOffered = append(p.NotOffered, NotOffered{KeyOllamaEnv, title, "Ollama.app is not installed"})
 		return
 	}
-	if env.OllamaFlashAttention == "1" && env.OllamaKVCache == "q8_0" {
+	configured := env.OllamaFlashAttention == "1" && env.OllamaKVCache == "q8_0"
+	if !env.OllamaAgent {
+		defer func() {
+			c := Change{
+				Key: KeyOllamaPersist, Title: "Keep the Ollama settings across logout and reboot",
+				Why:    "launchctl setenv is lost at logout. This installs a small per-user LaunchAgent that re-applies the two settings at login.",
+				Effect: "No performance effect by itself. Installs ~/Library/LaunchAgents/ai.aituner.ollama-env.plist (no admin needed); reverting removes it.",
+				Before: "not installed", After: "installed", Persistent: "yes",
+				Diff: diff("~/Library/LaunchAgents/ai.aituner.ollama-env.plist", "absent", "RunAtLoad: launchctl setenv OLLAMA_FLASH_ATTENTION=1, OLLAMA_KV_CACHE_TYPE=q8_0"),
+			}
+			if !configured {
+				c.Requires = KeyOllamaEnv
+			}
+			p.Changes = append(p.Changes, c)
+		}()
+	}
+	if configured {
 		p.NotOffered = append(p.NotOffered, NotOffered{KeyOllamaEnv, title, "already configured"})
 		return
 	}
@@ -169,7 +187,7 @@ func (p *Plan) planOllama(env Env) {
 		Why:    "Documented Ollama server settings (docs.ollama.com/faq). Flash attention is faster on long contexts; q8_0 KV cache halves context memory.",
 		Effect: "May speed up long-prompt processing and free memory for larger contexts. q8_0 KV cache has a small quality cost. The re-run benchmark shows whether it helped; short prompts often see no change. Restarts Ollama.app.",
 		Before: before, After: after, NeedsAdmin: false,
-		Persistent: "until logout/reboot (launchctl setenv, as Ollama documents for macOS)",
+		Persistent: "until logout (enable the persistence option to keep it)",
 		Diff: diff("OLLAMA_FLASH_ATTENTION", show(env.OllamaFlashAttention), "1") + "\n" +
 			diff("OLLAMA_KV_CACHE_TYPE", show(env.OllamaKVCache), "q8_0"),
 	})

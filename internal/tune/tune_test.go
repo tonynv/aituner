@@ -110,3 +110,33 @@ func TestValidateSelection(t *testing.T) {
 		t.Fatalf("empty selection must be allowed: %v", err)
 	}
 }
+
+func TestOllamaPersistOfferedAfterEnvAndDependsOnIt(t *testing.T) {
+	p := BuildPlan(refEnv())
+	env, ok1 := p.Find(KeyOllamaEnv)
+	per, ok2 := p.Find(KeyOllamaPersist)
+	if !ok1 || !ok2 || per.Requires != KeyOllamaEnv || per.NeedsAdmin {
+		t.Fatalf("env=%v persist=%+v", env.Key, per)
+	}
+	// order: env is applied before the agent that re-applies it
+	if p.Keys()[len(p.Keys())-1] != KeyOllamaPersist {
+		t.Fatalf("order: %v", p.Keys())
+	}
+	if err := p.ValidateSelection([]string{KeyOllamaPersist}); err == nil {
+		t.Fatal("persist without env must be rejected")
+	}
+}
+
+func TestOllamaPersistStandaloneWhenEnvAlreadySet(t *testing.T) {
+	e := refEnv()
+	e.OllamaFlashAttention, e.OllamaKVCache = "1", "q8_0"
+	p := BuildPlan(e)
+	per, ok := p.Find(KeyOllamaPersist)
+	if !ok || per.Requires != "" {
+		t.Fatalf("persist should stand alone: %+v ok=%v", per, ok)
+	}
+	e.OllamaAgent = true
+	if _, ok := BuildPlan(e).Find(KeyOllamaPersist); ok {
+		t.Fatal("already installed")
+	}
+}

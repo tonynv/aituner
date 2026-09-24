@@ -21,6 +21,14 @@ const (
 // DarwinRunner applies changes on macOS. Every apply is read back and verified.
 type DarwinRunner struct {
 	OllamaRestart func(ctx context.Context) error // injected so the API layer can wait for readiness
+	Agent         AgentSpec                       // zero value = DefaultAgent()
+}
+
+func (r DarwinRunner) agent() AgentSpec {
+	if r.Agent.Label == "" {
+		return DefaultAgent()
+	}
+	return r.Agent
 }
 
 func sysctlWiredMB(ctx context.Context) (int64, error) {
@@ -60,6 +68,8 @@ func (r DarwinRunner) Apply(ctx context.Context, c Change) error {
 		return nil
 	case KeyPersist:
 		return runAdmin(ctx, daemonInstallScript(c.value))
+	case KeyOllamaPersist:
+		return r.agent().Install(ctx)
 	case KeyOllamaEnv:
 		for k, v := range map[string]string{"OLLAMA_FLASH_ATTENTION": "1", "OLLAMA_KV_CACHE_TYPE": "q8_0"} {
 			if err := exec.CommandContext(ctx, "/bin/launchctl", "setenv", k, v).Run(); err != nil {
@@ -90,6 +100,8 @@ func (r DarwinRunner) Revert(ctx context.Context, c Change) error {
 		return nil
 	case KeyPersist:
 		return runAdmin(ctx, daemonRemoveScript())
+	case KeyOllamaPersist:
+		return r.agent().Remove(ctx)
 	case KeyOllamaEnv:
 		for _, k := range []string{"OLLAMA_FLASH_ATTENTION", "OLLAMA_KV_CACHE_TYPE"} {
 			_ = exec.CommandContext(ctx, "/bin/launchctl", "unsetenv", k).Run()

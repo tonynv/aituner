@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -249,6 +250,9 @@ func (s *Server) handleBenchmark(w http.ResponseWriter, r *http.Request) {
 		to, note := okPhase, ""
 		if err != nil {
 			to, note = failPhase, err.Error()
+			if errors.Is(err, context.Canceled) {
+				note = "Cancelled."
+			}
 		}
 		if e := s.tn.SetPhase(context.Background(), runID, running, to, note); e != nil {
 			s.cfg.Log("phase update failed: " + e.Error())

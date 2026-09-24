@@ -21,5 +21,6 @@ func ReadEnv(ctx context.Context, memTotalBytes, metalWorkingSetBytes int64, oll
 	}
 	e.OllamaFlashAttention, e.OllamaKVCache = ReadEnvVars(ctx)
 	e.PersistDaemon = DaemonInstalled()
+	e.OllamaAgent = DefaultAgent().Installed()
 	return e
 }
