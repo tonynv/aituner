@@ -233,6 +233,10 @@ func (s *Server) handleBenchmark(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusConflict, "wrong_phase", fmt.Sprintf("cannot start a benchmark while the run is %q", run.Phase))
 		return
 	}
+	if s.dl.Active() {
+		writeErr(w, http.StatusConflict, "download_running", "a model download is running and would distort the benchmark; wait for it or cancel it")
+		return
+	}
 	hw := s.hardware()
 	if bp := s.benchPlan(hw, run.Phase); len(bp.Downloads) > 0 && !req.ConfirmDownloads {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "needs_confirmation", "message": "this run installs or downloads software; confirm to proceed", "downloads": bp.Downloads})
@@ -543,5 +547,6 @@ func (s *Server) handleRecommendations(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadGateway, "upstream", err.Error())
 		return
 	}
+	s.rememberOffered(out)
 	writeJSON(w, http.StatusOK, out)
 }

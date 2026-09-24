@@ -21,6 +21,7 @@ import (
 
 	"github.com/tonynv/aituner/internal/bench"
 	"github.com/tonynv/aituner/internal/canirun"
+	"github.com/tonynv/aituner/internal/download"
 	"github.com/tonynv/aituner/internal/hf"
 	"github.com/tonynv/aituner/internal/platform"
 	"github.com/tonynv/aituner/internal/reco"
@@ -48,11 +49,13 @@ type Config struct {
 }
 
 type Server struct {
-	cfg    Config
-	ctx    context.Context
-	tn     *store.Tenant
-	jobs   *jobs
-	engine *reco.Engine
+	cfg     Config
+	ctx     context.Context
+	tn      *store.Tenant
+	jobs    *jobs
+	engine  *reco.Engine
+	dl      *download.Manager
+	allowed map[string]bool // repos the recommender has offered: the only ones downloads may fetch (guarded by mu)
 
 	mu          sync.Mutex           // guards hw, unsupported, hosts, launch
 	launch      map[string]time.Time // single-use launch nonces -> expiry
@@ -73,7 +76,7 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 	if cfg.Log == nil {
 		cfg.Log = func(string) {}
 	}
-	s := &Server{cfg: cfg, ctx: ctx, tn: cfg.Store.ForTenant(id), jobs: newJobs(), hosts: map[string]bool{}, launch: map[string]time.Time{}, launchTTL: 15 * time.Minute}
+	s := &Server{cfg: cfg, ctx: ctx, tn: cfg.Store.ForTenant(id), jobs: newJobs(), hosts: map[string]bool{}, allowed: map[string]bool{}, dl: download.New(cfg.HF), launch: map[string]time.Time{}, launchTTL: 15 * time.Minute}
 	s.engine = &reco.Engine{CanIRun: cfg.CanIRun, HF: cfg.HF, Cache: storeCache{s.tn}}
 	if err := s.refreshHW(ctx); err != nil && !errors.Is(err, platform.ErrUnsupported) {
 		return nil, err
@@ -214,6 +217,11 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("POST /api/v1/tune/apply", s.handleTuneApply)
 	api.HandleFunc("POST /api/v1/tune/revert", s.handleTuneRevert)
 	api.HandleFunc("GET /api/v1/recommendations", s.handleRecommendations)
+	api.HandleFunc("GET /api/v1/settings", s.handleGetSettings)
+	api.HandleFunc("PUT /api/v1/settings", s.handlePutSettings)
+	api.HandleFunc("GET /api/v1/downloads", s.handleListDownloads)
+	api.HandleFunc("POST /api/v1/downloads", s.handleStartDownload)
+	api.HandleFunc("POST /api/v1/downloads/cancel", s.handleCancelDownload)
 
 	root := http.NewServeMux()
 	root.Handle("/api/", s.origin(s.auth(api)))

@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -18,6 +19,7 @@ import (
 	"github.com/tonynv/aituner/internal/canirun"
 	"github.com/tonynv/aituner/internal/hf"
 	"github.com/tonynv/aituner/internal/platform"
+	"github.com/tonynv/aituner/internal/reco"
 	"github.com/tonynv/aituner/internal/store"
 	"github.com/tonynv/aituner/internal/tune"
 )
@@ -35,6 +37,7 @@ type env struct {
 func newEnv(t *testing.T) *env {
 	t.Helper()
 	t.Setenv("AITUNER_DATA_DIR", t.TempDir())
+	t.Setenv("HOME", t.TempDir()) // sandbox: the models folder and HF cache lookups resolve inside it
 	db, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
 	if err != nil {
 		t.Fatal(err)
@@ -370,4 +373,89 @@ func TestInterruptedRunIsRecoveredOnStart(t *testing.T) {
 	if ph, _ := s2.Status(); ph != store.PhaseDetected {
 		t.Fatalf("still stuck: %s", ph)
 	}
+}
+
+func (e *env) json(t *testing.T, method, path, body string, want int) map[string]any {
+	t.Helper()
+	r, b := e.do(t, method, path, body, e.authed(nil))
+	if r.StatusCode != want {
+		t.Fatalf("%s %s -> %d, want %d: %s", method, path, r.StatusCode, want, b)
+	}
+	var m map[string]any
+	_ = json.Unmarshal(b, &m)
+	return m
+}
+
+func TestSettingsDefaultValidationAndReset(t *testing.T) {
+	e := newEnv(t)
+	home, _ := filepath.EvalSymlinks(os.Getenv("HOME")) // the API reports canonical (symlink-resolved) paths
+	m := e.json(t, "GET", "/api/v1/settings", "", 200)
+	if m["is_default"] != true || m["models_dir"] != filepath.Join(home, "Models") {
+		t.Fatalf("default: %v", m)
+	}
+	info := m["info"].(map[string]any)
+	if info["writable"] != true || info["free_bytes"].(float64) <= 0 {
+		t.Fatalf("info: %v", info)
+	}
+	for _, bad := range []string{"/etc", "/tmp/x", "~/.ssh", "~", "relative", "~/Library/x", "../../etc", "~/Models/.hidden"} {
+		body, _ := json.Marshal(map[string]string{"models_dir": bad})
+		r, b := e.do(t, "PUT", "/api/v1/settings", string(body), e.authed(nil))
+		if r.StatusCode != 400 || !strings.Contains(string(b), "bad_folder") {
+			t.Errorf("%q -> %d %s", bad, r.StatusCode, b)
+		}
+	}
+	m = e.json(t, "PUT", "/api/v1/settings", `{"models_dir":"~/LLMs/mlx"}`, 200)
+	if m["is_default"] != false || !strings.HasSuffix(m["models_dir"].(string), "/LLMs/mlx") {
+		t.Fatalf("saved: %v", m)
+	}
+	if fi, err := os.Stat(m["models_dir"].(string)); err != nil || !fi.IsDir() {
+		t.Fatal("the folder must be created and proven writable on save")
+	}
+	if g := e.json(t, "GET", "/api/v1/settings", "", 200); g["models_dir"] != m["models_dir"] {
+		t.Fatalf("not persisted: %v", g)
+	}
+	if m = e.json(t, "PUT", "/api/v1/settings", `{"models_dir":""}`, 200); m["is_default"] != true {
+		t.Fatalf("reset: %v", m)
+	}
+	e.json(t, "PUT", "/api/v1/settings", `{"models_dir":"~/x","extra":1}`, 400) // unknown fields refused
+	if r, _ := e.do(t, "PUT", "/api/v1/settings", `{"models_dir":"~/x"}`, map[string]string{"Cookie": CookieName + "=" + token}); r.StatusCode != 403 {
+		t.Fatalf("Origin required on PUT: %d", r.StatusCode)
+	}
+}
+
+func TestDownloadsAreGatedAndRestrictedToOfferedRepos(t *testing.T) {
+	e := newEnv(t)
+	post := func(repo string, want int) map[string]any {
+		body, _ := json.Marshal(map[string]string{"repo": repo})
+		return e.json(t, "POST", "/api/v1/downloads", string(body), want)
+	}
+	for _, bad := range []string{"", "noslash", "a/b; rm -rf ~", "../../etc/passwd", "a/b c"} {
+		post(bad, 400) // never reaches any lookup
+	}
+	post("mlx-community/Qwen3-8B-4bit", 409) // valid, but the run is not finished: wrong_phase
+	ctx := context.Background()
+	run, _ := e.s.tn.LatestRun(ctx)
+	for _, s := range [][2]string{{store.PhaseDetected, store.PhaseBaselineRunning}, {store.PhaseBaselineRunning, store.PhaseBaselineDone},
+		{store.PhaseBaselineDone, store.PhaseTuneReviewed}, {store.PhaseTuneReviewed, store.PhaseTunedRunning}, {store.PhaseTunedRunning, store.PhaseTunedDone}} {
+		if err := e.s.tn.SetPhase(ctx, run.ID, s[0], s[1], ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if m := post("mlx-community/Qwen3-8B-4bit", 403); m["error"] != "not_offered" { // finished, but never recommended
+		t.Fatalf("%v", m)
+	}
+	e.s.rememberOffered(&reco.Output{Groups: map[string][]reco.Candidate{"code": {{Runtime: "mlx", Repo: "mlx-community/Qwen3-8B-4bit",
+		Variants: []reco.Variant{{Repo: "someone/Qwen3-8B-abliterated-4bit"}}}, {Runtime: "mflux", Repo: "Z-Image-Turbo"}}}})
+	if m := post("mlx-community/Qwen3-8B-4bit", 409); m["error"] != "no_runtime" { // offered, but the temp data dir has no MLX runtime
+		t.Fatalf("%v", m)
+	}
+	if m := post("someone/Qwen3-8B-abliterated-4bit", 409); m["error"] != "no_runtime" {
+		t.Fatalf("variants are offered too: %v", m)
+	}
+	post("Z-Image-Turbo", 400) // not a repo id at all; image models are not downloadable through this path
+	l := e.json(t, "GET", "/api/v1/downloads", "", 200)
+	if l["active"] != false || len(l["items"].([]any)) != 0 || l["models_dir"] == "" {
+		t.Fatalf("%v", l)
+	}
+	e.json(t, "POST", "/api/v1/downloads/cancel", `{"repo":"a/b"}`, 200)
 }
