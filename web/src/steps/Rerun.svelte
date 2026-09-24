@@ -1,5 +1,6 @@
 <script>
   import Icon from '../lib/Icon.svelte';
+  import Warnings from '../lib/Warnings.svelte';
   import Progress from '../lib/Progress.svelte';
   import LogPanel from '../lib/LogPanel.svelte';
   import { app, act } from '../lib/app.svelte.js';
@@ -54,6 +55,7 @@
       <div><button class="btn small" onclick={() => act(() => api.cancel())}><Icon name="x" size={14} /> Cancel</button></div>
     </div>
   {:else if st.phase === 'tuned_done'}
+    <Warnings items={[...(st.warnings?.baseline ?? []), ...(st.warnings?.tuned ?? [])]} />
     <div class="card row summary">
       <span class="badge ok">{counts.faster} faster</span>
       <span class="badge {counts.slower ? 'bad' : ''}">{counts.slower} slower</span>

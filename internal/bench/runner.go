@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+
+	"github.com/tonynv/aituner/internal/platform"
 )
 
 type Options struct {
@@ -18,9 +20,10 @@ type Options struct {
 }
 
 type Result struct {
-	Metrics []Metric `json:"metrics"`
-	Skipped []string `json:"skipped"`
-	Probe   Probe    `json:"probe"`
+	Metrics  []Metric `json:"metrics"`
+	Skipped  []string `json:"skipped"`
+	Warnings []string `json:"warnings"`
+	Probe    Probe    `json:"probe"`
 }
 
 // Run executes every suite in order. Core suites (memory, GPU, MLX LLM) must succeed; the Ollama suite is
@@ -37,6 +40,12 @@ func Run(ctx context.Context, o Options, emit Emit) (Result, error) {
 	// keep the Mac awake for the duration (idle sleep would corrupt timing); released when we finish
 	if cf := exec.CommandContext(ctx, "/usr/bin/caffeinate", "-i", "-w", strconv.Itoa(os.Getpid())); cf.Start() == nil {
 		defer func() { _ = cf.Process.Kill(); _ = cf.Wait() }()
+	}
+
+	pre := platform.CheckHealth(ctx)
+	for _, w := range pre.Warnings("Before the run") {
+		res.Warnings = append(res.Warnings, w)
+		emit(Event{Level: "warn", Message: w})
 	}
 
 	prog("Preparing: freeing GPU memory held by idle models")
@@ -98,6 +107,12 @@ func Run(ctx context.Context, o Options, emit Emit) (Result, error) {
 		emit(Event{Level: "warn", Message: "Ollama suite skipped: " + err.Error()})
 	} else {
 		res.Metrics = append(res.Metrics, om...)
+	}
+	// throttling that started during the run would silently understate every number, so look again
+	if post := platform.CheckHealth(ctx); post.ThermalWarning && !pre.ThermalWarning {
+		w := "Thermal throttling began during the run (" + post.ThermalNote + "); results may understate this machine."
+		res.Warnings = append(res.Warnings, w)
+		emit(Event{Level: "warn", Message: w})
 	}
 	emit(Event{Level: "info", Message: "Benchmark complete", Progress: 1})
 	return res, nil

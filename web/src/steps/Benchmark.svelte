@@ -3,6 +3,7 @@
   import LogPanel from '../lib/LogPanel.svelte';
   import MetricsTable from '../lib/MetricsTable.svelte';
   import Icon from '../lib/Icon.svelte';
+  import Warnings from '../lib/Warnings.svelte';
   import { app, act } from '../lib/app.svelte.js';
   import { api } from '../lib/api.js';
 
@@ -26,6 +27,7 @@
   {:else}
     {#if failed}<p class="bad" role="alert"><Icon name="alert" size={16} /> {st.run.note}</p>{/if}
     {#if st.baseline.length}
+      <Warnings items={st.warnings?.baseline} />
       <div class="card"><MetricsTable metrics={st.baseline} /></div>
       {#if st.skipped?.baseline?.length}
         <p class="muted"><Icon name="info" size={14} /> Skipped: {st.skipped.baseline.join('; ')}</p>

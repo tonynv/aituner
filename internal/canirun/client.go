@@ -3,7 +3,6 @@
 package canirun
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -94,7 +93,7 @@ func (c *Client) Recommend(ctx context.Context, hw Hardware, useCase string, lim
 	}
 	b, _ := json.Marshal(body)
 	var out RecommendResponse
-	if err := c.HTTP.JSON(ctx, "POST", c.Base+"/api/recommend", bytes.NewReader(b), &out); err != nil {
+	if err := c.HTTP.JSON(ctx, "POST", c.Base+"/api/recommend", b, &out); err != nil {
 		return nil, err
 	}
 	for i, r := range out.Recommendations {

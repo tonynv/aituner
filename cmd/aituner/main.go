@@ -24,6 +24,7 @@ import (
 	"github.com/tonynv/aituner/internal/bench"
 	"github.com/tonynv/aituner/internal/canirun"
 	"github.com/tonynv/aituner/internal/hf"
+	"github.com/tonynv/aituner/internal/lock"
 	"github.com/tonynv/aituner/internal/platform"
 	"github.com/tonynv/aituner/internal/store"
 	"github.com/tonynv/aituner/internal/tune"
@@ -31,11 +32,19 @@ import (
 
 const defaultPort = 8737
 
+// version is set at build time (-ldflags "-X main.version=...").
+var version = "dev"
+
 func main() {
 	port := flag.Int("port", defaultPort, "loopback port for the web UI (falls back to a free port if taken)")
 	noTUI := flag.Bool("no-tui", false, "headless: log to stdout instead of the terminal UI")
 	noOpen := flag.Bool("no-open", false, "do not open the browser")
+	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
+	if *showVersion {
+		fmt.Println("aituner", version)
+		return
+	}
 
 	if err := run(*port, *noTUI, *noOpen); err != nil {
 		fmt.Fprintln(os.Stderr, "aituner:", err)
@@ -55,6 +64,11 @@ func run(port int, noTUI, noOpen bool) error {
 	if err := os.MkdirAll(dataDir, 0o700); err != nil {
 		return err
 	}
+	lk, err := lock.Acquire(filepath.Join(dataDir, "aituner.lock"))
+	if err != nil {
+		return err
+	}
+	defer lk.Release()
 	db, err := store.Open(filepath.Join(dataDir, "aituner.db"))
 	if err != nil {
 		return err

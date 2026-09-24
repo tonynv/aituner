@@ -47,7 +47,7 @@ fi
 # Go binary: `go build` is incremental, so this is cheap when nothing changed.
 say "building aituner"
 mkdir -p bin
-go build -o bin/aituner ./cmd/aituner
+go build -ldflags "-X main.version=$(git describe --tags --always --dirty 2>/dev/null || echo dev)" -o bin/aituner ./cmd/aituner
 
 command -v ollama >/dev/null 2>&1 && say "ollama: found" || say "ollama: not installed (optional; MLX benchmarks still work)"
 

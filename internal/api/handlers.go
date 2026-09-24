@@ -28,8 +28,9 @@ type BenchPlan struct {
 }
 
 type benchMeta struct {
-	Skipped []string    `json:"skipped"`
-	Probe   bench.Probe `json:"probe"`
+	Skipped  []string    `json:"skipped"`
+	Warnings []string    `json:"warnings"`
+	Probe    bench.Probe `json:"probe"`
 }
 
 type StateResp struct {
@@ -44,6 +45,7 @@ type StateResp struct {
 	Tuned     []bench.Metric      `json:"tuned"`
 	Compare   []bench.Row         `json:"compare"`
 	Skipped   map[string][]string `json:"skipped"`
+	Warnings  map[string][]string `json:"warnings"`
 	Changes   []store.TuneChange  `json:"tune_changes"`
 	BenchPlan BenchPlan           `json:"bench_plan"`
 	Unlocked  bool                `json:"recommendations_unlocked"`
@@ -132,7 +134,7 @@ func (s *Server) benchPlan(hw *platform.Hardware, phase string) BenchPlan {
 
 func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	resp := StateResp{Platform: s.cfg.Platform.Name(), Job: s.jobs.info(),
-		Baseline: []bench.Metric{}, Tuned: []bench.Metric{}, Compare: []bench.Row{}, Skipped: map[string][]string{}, Changes: []store.TuneChange{}}
+		Baseline: []bench.Metric{}, Tuned: []bench.Metric{}, Compare: []bench.Row{}, Skipped: map[string][]string{}, Warnings: map[string][]string{}, Changes: []store.TuneChange{}}
 	hw := s.hardware()
 	if hw == nil {
 		resp.Message = s.unsupportedMsg()
@@ -159,6 +161,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 			var m benchMeta
 			if json.Unmarshal(e.Body, &m) == nil {
 				resp.Skipped[stage] = m.Skipped
+				resp.Warnings[stage] = m.Warnings
 			}
 		}
 	}
@@ -285,7 +288,7 @@ func (s *Server) runBenchmark(ctx context.Context, emit bench.Emit, runID, stage
 			return err
 		}
 	}
-	meta, _ := json.Marshal(benchMeta{Skipped: res.Skipped, Probe: res.Probe})
+	meta, _ := json.Marshal(benchMeta{Skipped: res.Skipped, Warnings: res.Warnings, Probe: res.Probe})
 	return s.tn.CachePut(ctx, "bench_meta", runID+"|"+stage, meta)
 }
 
