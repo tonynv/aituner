@@ -108,6 +108,13 @@ func Run(ctx context.Context, o Options, emit Emit) (Result, error) {
 	} else {
 		res.Metrics = append(res.Metrics, om...)
 	}
+	for _, m := range res.Metrics {
+		if u := UnstablePct(m.Trials); u > UnstableThresholdPct && !isInfo(m) {
+			w := fmt.Sprintf("%s varied by ±%.0f%% between trials (something else may have used the machine); the median is reported, but treat this number with care.", m.Key(), u)
+			res.Warnings = append(res.Warnings, w)
+			emit(Event{Level: "warn", Message: w})
+		}
+	}
 	// throttling that started during the run would silently understate every number, so look again
 	if post := platform.CheckHealth(ctx); post.ThermalWarning && !pre.ThermalWarning {
 		w := "Thermal throttling began during the run (" + post.ThermalNote + "); results may understate this machine."

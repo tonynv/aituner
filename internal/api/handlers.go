@@ -277,7 +277,7 @@ func (s *Server) runBenchmark(ctx context.Context, emit bench.Emit, runID, stage
 	if threads == 0 {
 		threads = hw.CPU.Cores
 	}
-	res, err := bench.Run(ctx, bench.Options{MLX: mlx, Ollama: s.cfg.Ollama, Threads: threads, Trials: 3, FetchModels: true}, emit)
+	res, err := bench.Run(ctx, bench.Options{MLX: mlx, Ollama: s.cfg.Ollama, Threads: threads, Trials: 5, FetchModels: true}, emit)
 	if err != nil {
 		return err
 	}

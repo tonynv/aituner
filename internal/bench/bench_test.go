@@ -111,3 +111,21 @@ func TestRunLiveFull(t *testing.T) {
 		t.Fatalf("too few metrics: %d", len(res.Metrics))
 	}
 }
+
+func TestSpreadIgnoresOneDisturbedTrialWithFiveOrMore(t *testing.T) {
+	clean := []float64{318, 319, 320, 319, 321}
+	dirty := []float64{318, 319, 88, 319, 321} // one trial disturbed by another workload
+	if got := SpreadPct(dirty); got > 1 {
+		t.Fatalf("trimmed spread should stay small, got %.1f%%", got)
+	}
+	if got := UnstablePct(dirty); got < 30 {
+		t.Fatalf("the untrimmed figure must expose the disturbance, got %.1f%%", got)
+	}
+	if Median(dirty) != 319 || Median(clean) != 319 {
+		t.Fatal("median must ignore the outlier")
+	}
+	// with only three trials nothing is trimmed: the disturbance is fully visible in the noise band
+	if got := SpreadPct([]float64{318, 88, 321}); got < 30 {
+		t.Fatalf("n<5 must not trim, got %.1f%%", got)
+	}
+}

@@ -42,24 +42,37 @@ func Median(v []float64) float64 {
 	return (c[len(c)/2-1] + c[len(c)/2]) / 2
 }
 
-// SpreadPct is the relative half-range of the trials around their median, in percent. It is the noise
-// yardstick used to decide whether a before/after difference means anything.
+// SpreadPct is the relative half-range of the trials around their median, in percent: the noise yardstick used
+// to decide whether a before/after difference means anything. With five or more trials the single lowest and
+// highest are set aside first, so one disturbed trial (another app grabbing the GPU) does not inflate the noise
+// estimate; the median already ignores it. UnstablePct reports the untrimmed figure for warnings.
 func SpreadPct(v []float64) float64 {
-	if len(v) < 2 {
+	c := append([]float64(nil), v...)
+	sort.Float64s(c)
+	if len(c) >= 5 {
+		c = c[1 : len(c)-1]
+	}
+	return halfRangePct(c)
+}
+
+// UnstablePct is the untrimmed relative half-range, used to flag disturbed measurements.
+func UnstablePct(v []float64) float64 {
+	c := append([]float64(nil), v...)
+	sort.Float64s(c)
+	return halfRangePct(c)
+}
+
+// halfRangePct expects sorted input.
+func halfRangePct(c []float64) float64 {
+	if len(c) < 2 {
 		return 0
 	}
-	m := Median(v)
+	m := Median(c)
 	if m == 0 {
 		return 0
 	}
-	lo, hi := v[0], v[0]
-	for _, x := range v {
-		if x < lo {
-			lo = x
-		}
-		if x > hi {
-			hi = x
-		}
-	}
-	return (hi - lo) / 2 / m * 100
+	return (c[len(c)-1] - c[0]) / 2 / m * 100
 }
+
+// UnstableThresholdPct: beyond this untrimmed spread a measurement is reported as disturbed.
+const UnstableThresholdPct = 15.0
