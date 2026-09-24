@@ -49,6 +49,9 @@
   .entry.list .extra { grid-column: 1 / -1; }
   @media (max-width: 900px) { .entry.list { grid-template-columns: 1fr; gap: 14px; } }
   .tight { gap: 8px; } .stack { display: flex; flex-direction: column; }
+  .actions { align-items: flex-start; }
+  .actions :global(.dl) { width: 100%; }
+  .actions :global(.dl > .btn) { justify-self: start; }
   .top { align-items: flex-start; justify-content: space-between; flex-wrap: nowrap; }
   .who { min-width: 0; } .who h3 { word-break: break-word; }
   .badges { gap: 6px; }

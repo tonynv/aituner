@@ -9,6 +9,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -63,6 +64,16 @@ func run(port int, noTUI, noOpen bool) error {
 	}
 	if err := os.MkdirAll(dataDir, 0o700); err != nil {
 		return err
+	}
+	logf, err := openLog(filepath.Join(dataDir, "aituner.log"))
+	if err != nil {
+		return err
+	}
+	defer logf.Close()
+	if noTUI {
+		log.SetOutput(io.MultiWriter(os.Stderr, logf))
+	} else {
+		log.SetOutput(logf) // the terminal UI owns the screen
 	}
 	lk, err := lock.Acquire(filepath.Join(dataDir, "aituner.lock"))
 	if err != nil {
@@ -119,6 +130,15 @@ func run(port int, noTUI, noOpen bool) error {
 	shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	return httpSrv.Shutdown(shutdown)
+}
+
+// openLog opens the private (0600) append-only log. A log over 5 MB is moved aside once at startup so it cannot
+// grow without bound.
+func openLog(path string) (*os.File, error) {
+	if fi, err := os.Stat(path); err == nil && fi.Size() > 5<<20 {
+		_ = os.Rename(path, path+".1")
+	}
+	return os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 }
 
 func openBrowser(url string) {

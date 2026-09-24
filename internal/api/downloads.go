@@ -193,6 +193,7 @@ func (s *Server) handleStartDownload(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "bad_folder", "the saved models folder is not usable: "+err.Error())
 		return
 	}
+	s.cfg.Log("audit: download requested repo=" + req.Repo + " dest_root=" + root)
 	st, err := s.dl.Start(s.ctx, mlx, req.Repo, root)
 	switch err {
 	case nil:

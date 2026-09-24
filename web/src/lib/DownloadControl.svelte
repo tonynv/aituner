@@ -46,7 +46,8 @@
 </div>
 
 <style>
-  .dl { display: grid; gap: 8px; min-width: 0; }
+  .dl { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; min-width: 0; justify-items: start; }
+  .dl > :global(.cmd), .dl > :global(div) { width: 100%; }
   .between { justify-content: space-between; }
   .small { font-size: 13px; }
   .bad { color: var(--bad); margin: 0; }

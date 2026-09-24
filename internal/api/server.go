@@ -224,7 +224,7 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("POST /api/v1/downloads/cancel", s.handleCancelDownload)
 
 	root := http.NewServeMux()
-	root.Handle("/api/", s.origin(s.auth(api)))
+	root.Handle("/api/", s.origin(s.auth(s.audit(api))))
 	root.HandleFunc("/", s.handleStatic)
 	return s.headers(s.hostCheck(root))
 }
@@ -293,6 +293,21 @@ func (s *Server) auth(next http.Handler) http.Handler {
 			return
 		}
 		writeErr(w, http.StatusUnauthorized, "unauthorized", "missing or invalid session")
+	})
+}
+
+// audit logs every state-changing request after it has passed authentication, so any action taken through
+// the API (start a benchmark, apply tuning, download a model, change the folder) can be attributed later.
+func (s *Server) audit(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions {
+			ua := r.UserAgent()
+			if len(ua) > 80 {
+				ua = ua[:80]
+			}
+			s.cfg.Log(fmt.Sprintf("audit: %s %s from %s ua=%q referer=%q", r.Method, r.URL.Path, r.RemoteAddr, ua, r.Header.Get("Referer")))
+		}
+		next.ServeHTTP(w, r)
 	})
 }
 

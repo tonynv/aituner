@@ -21,7 +21,7 @@
 </script>
 
 {#if kv}
-  <div class="kv">
+  <div class="kvmeter">
     <div class="bar" role="img" aria-label={label}>
       <span class="seg weights" style:width="{pct(kv.weights_gb)}%"></span>
       <span class="seg runtime" style:width="{pct(kv.overhead_gb)}%"></span>
@@ -47,7 +47,7 @@
 {/if}
 
 <style>
-  .kv { display: grid; gap: 6px; min-width: 0; }
+  .kvmeter { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; min-width: 0; }
   .bar { display: flex; height: 10px; border: 1px solid var(--border-strong); border-radius: var(--radius); overflow: hidden; background: var(--bg); }
   .seg { height: 100%; }
   .weights { background: var(--text); }
