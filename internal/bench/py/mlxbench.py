@@ -98,6 +98,20 @@ def fetch(args):
     emit(event="fetched", model=args.model, path=path)
 
 
+def download(args):
+    """Save a model into a chosen folder. Patterns come from the caller (single source of truth in Go)."""
+    from huggingface_hub import snapshot_download
+
+    log(f"downloading {args.model} to {args.dir}")
+    snapshot_download(
+        args.model,
+        local_dir=args.dir,
+        allow_patterns=json.loads(args.allow),
+        ignore_patterns=json.loads(args.ignore),
+    )
+    emit(event="downloaded", model=args.model, dir=args.dir)
+
+
 def llm(args):
     import mlx.core as mx
     from mlx_lm import load, stream_generate
@@ -140,6 +154,12 @@ def main():
     f = sub.add_parser("fetch")
     f.add_argument("--model", required=True)
     f.set_defaults(fn=fetch)
+    d = sub.add_parser("download")
+    d.add_argument("--model", required=True)
+    d.add_argument("--dir", required=True)
+    d.add_argument("--allow", required=True)
+    d.add_argument("--ignore", required=True)
+    d.set_defaults(fn=download)
     m = sub.add_parser("llm")
     m.add_argument("--model", required=True)
     m.add_argument("--prompt-tokens", type=int, default=512)

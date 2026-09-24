@@ -192,3 +192,12 @@ func (m MLX) LLM(ctx context.Context, emit Emit, model string, trials int, versi
 	}
 	return metricsFrom(lines, versions), nil
 }
+
+// Download saves a repo into dir using the given file patterns. Progress is observed by the caller from the
+// directory size; the subprocess only reports success or failure.
+func (m MLX) Download(ctx context.Context, repo, dir string, allow, ignore []string) error {
+	a, _ := json.Marshal(allow)
+	i, _ := json.Marshal(ignore)
+	_, _, err := m.run(ctx, func(Event) {}, "download", "--model", repo, "--dir", dir, "--allow", string(a), "--ignore", string(i))
+	return err
+}
