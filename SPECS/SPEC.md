@@ -40,7 +40,7 @@ Every result is tied to a `run` (one pass through the flow) so history is kept a
 
 ## 3. Stack and conventions (per engineering standards)
 
-- **Backend:** Go (latest stable; 1.26.x on the reference machine **[VERIFIED]**). Pure-Go SQLite
+- **Backend:** Go (latest stable; 1.27.1 on the reference machine, go.mod requires 1.27.1 **[VERIFIED]**). Pure-Go SQLite
   (`modernc.org/sqlite`, no CGO). Python only as a subprocess for MLX workloads (§6).
 - **Frontend:** Svelte 5 + Vite SPA, static build embedded in the Go binary with `go:embed`. PWA (manifest +
   service worker), responsive, dark and light first-class, thin-line icons, 2–4px radii, no emoji.
