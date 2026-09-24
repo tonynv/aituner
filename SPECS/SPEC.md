@@ -179,8 +179,10 @@ the app on the user's first Run click, after consent. Never uses `sudo`. On Linu
 ## 10. Security model (localhost tool that can change system settings)
 
 - Bind `127.0.0.1` only. Fixed default port with fallback; port printed in TUI.
-- Per-launch random 256-bit token, delivered in the URL the tool opens, exchanged once for an `HttpOnly`,
-  `SameSite=Strict` cookie; all `/api` requires it (constant-time compare).
+- Per-launch random 256-bit session token that **never appears in a URL, argv or the terminal**. The browser is handed a
+  **single-use, 15-minute launch nonce** (`?t=`), exchanged once for an `HttpOnly`, `SameSite=Strict` cookie carrying the
+  session token; replays, expired and evicted nonces (max 8 outstanding) set nothing. All `/api` requires the cookie
+  (constant-time compare). The TUI mints a fresh link per `o` press.
 - `Host` allow-list (`127.0.0.1:port`, `localhost:port`) to defeat DNS rebinding; `Origin` must match on
   non-GET; CSRF-safe by cookie + Origin check; strict CSP, `X-Content-Type-Options`, no CORS.
 - Privileged actions only through §7's allow-listed tunables — no generic "run command" endpoint. Arguments are
@@ -219,6 +221,29 @@ are reported honestly in `TASKS.md`.
 - Bubble Tea TUI wraps a web UI (standards say Go binaries are TUIs; product requires a browser UI) — both are provided.
 - Licence for the repo (none chosen yet).
 
+4. **Persist Ollama env (opt-in, user-level, no admin)** — per-user LaunchAgent `ai.aituner.ollama-env`, built with `plutil`
+   argv (no shell), lint-checked, `launchctl bootstrap gui/<uid>`, then **`kickstart -k`** and verified by reading the
+   variables back. (`bootstrap` alone does not fire RunAtLoad in a live session; found by a real launchctl test.)
+
+## 14a. Reliability and robustness (implemented and tested)
+
+- **Single instance:** `flock` on `aituner.lock` (`0600`, PID inside); a second launch refuses with the running PID.
+- **Outbound resilience:** `internal/httpx` retries 429/502/503/504 and network errors (3 attempts, backoff, `Retry-After`
+  capped at 10 s, body re-sent), context-aware, clear rate-limit message, allow-listed HTTPS only (redirects too).
+- **Benchmark validity:** before/after each run the machine is checked (battery, thermal/speed-limit, load average, memory
+  pressure) and warnings are stored with the results and shown in the UI. Five trials per metric; noise = half-range with the
+  lowest/highest trial trimmed at n>=5 (median ignores outliers); any metric whose untrimmed spread exceeds 15% is flagged.
+  Verified live: a busy machine (load 7.3/10 cores from the QA browser) was flagged.
+- **Cancel / crash safety:** cancelling a benchmark returns the run to its previous phase, kills the Python and `caffeinate`
+  children (verified with `pgrep`), and the run is retryable; a `*_running` run left by a crash is recovered at startup.
+  A failed tuning apply is rolled back automatically.
+- **Command safety:** HF repo ids are validated (`^[A-Za-z0-9][A-Za-z0-9._-]*/...`, no `..`) before they can appear in a
+  copy-paste command; commands use the venv's absolute, single-quoted path.
+- **PWA:** manifest + icons verified at declared sizes, service worker is network-first, never caches `/api/`, prunes stale
+  hashed assets; offline reload shows the cached shell with a clear banner (all verified in Chrome).
+- **Fuzzing:** Go native fuzz targets for the command builder, name matchers, estimator, thermal/load parsers, system_profiler
+  parser and the admin-script allow-list (fuzzing found and fixed an estimator returning negative speed for invalid input).
+
 ## 15. Measured on the reference machine, and known gaps
 
 Measured end to end through the real UI (Mac Studio M1 Max 32 GB, macOS 26.5.1, mlx 0.32.2, mlx-lm 0.31.3, Ollama 0.34.3):
@@ -232,11 +257,18 @@ Measured end to end through the real UI (Mac Studio M1 Max 32 GB, macOS 26.5.1, 
 | Ollama llama3.2:3b prompt / generation | 884 / 82.3 tok/s (MLX generates ~57% faster) |
 | Speed-estimate calibration | 67% of measured bandwidth |
 
+Release-gate results (independent agents, all findings fixed or dispositioned): code review PASS, security PASS (no
+critical/high; token-in-URL note fixed by single-use launch links), UI/UX NEEDS-WORK -> fixed (dark/light `--faint` contrast,
+verified by computing WCAG ratios), dependencies PASS, QA 7/8 -> mobile comparison table fixed, manager audit: only the
+owner-only items below remain. `govulncheck`: none; `npm audit`: 0; `go test -race`: pass.
+
 Known gaps:
 - **[UNVERIFIED]** Applying the wired-limit change (needs the macOS admin dialog) was not exercised: no human was present
   to approve it. Plan, script generation, allow-list and rollback logic are unit-tested; the real `sysctl`/LaunchDaemon
   path and whether Metal's working set then follows the new limit still need a human-approved run.
-- Ollama env tuning is not persistent across logout/reboot (`launchctl setenv`); no LaunchAgent yet.
+- The Ollama LaunchAgent is proven to install, run and remove under real launchctl, but its RunAtLoad firing on an actual
+  fresh login has not been observed.
+- Node 26.x is on Node's "Current" release line (not LTS). The owner's standard is latest stable and no downgrades, so it stays.
 - Speed estimates are bandwidth models; MoE routing overhead and diffusion/vision architectures are not modelled.
 - Recommendation install commands assume the user runs them from the aituner venv (`~/Library/Application Support/aituner/venv/bin`).
 - Linux: not implemented (`platform` returns `ErrUnsupported`).
