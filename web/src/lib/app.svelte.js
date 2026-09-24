@@ -29,7 +29,7 @@ export async function refresh() {
 let timer;
 export function start() {
   refresh();
-  subscribe((ev) => {
+  const unsub = subscribe((ev) => {
     if (ev.seq <= app.lastSeq) return;
     app.lastSeq = ev.seq;
     app.log.push(ev);
@@ -40,7 +40,7 @@ export function start() {
     timer = setTimeout(tick, isRunning() ? 1000 : 4000);
   };
   timer = setTimeout(tick, 1500);
-  return () => clearTimeout(timer);
+  return () => { clearTimeout(timer); unsub(); };
 }
 
 // Run an action, surface its error, and refresh state.

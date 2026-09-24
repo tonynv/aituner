@@ -18,7 +18,7 @@ type eventMsg api.SSEEvent
 type model struct {
 	srv      *api.Server
 	url      string
-	open     func()
+	link     func() string // mints a fresh single-use launch link
 	cancel   context.CancelFunc
 	phase    string
 	job      *api.JobInfo
@@ -33,10 +33,10 @@ var (
 	dim   = lipgloss.NewStyle().Faint(true)
 )
 
-func runTUI(ctx context.Context, stop context.CancelFunc, srv *api.Server, url string, open func()) error {
+func runTUI(ctx context.Context, stop context.CancelFunc, srv *api.Server, link func() string) error {
 	replay, ch, unsub := srv.Subscribe()
 	defer unsub()
-	m := model{srv: srv, url: url, open: open, cancel: stop, events: ch}
+	m := model{srv: srv, url: link(), link: link, cancel: stop, events: ch}
 	for _, e := range replay {
 		m.addLine(e)
 	}
@@ -99,7 +99,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.cancel()
 			return m, tea.Quit
 		case "o":
-			m.open()
+			openBrowser(m.url) // the displayed link is unused unless the browser was already opened
+			m.url = m.link()   // and always show a fresh one afterwards
 		}
 	}
 	return m, nil

@@ -4,7 +4,9 @@ package api
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -52,7 +54,9 @@ type Server struct {
 	jobs   *jobs
 	engine *reco.Engine
 
-	mu          sync.Mutex // guards hw, unsupported, hosts
+	mu          sync.Mutex           // guards hw, unsupported, hosts, launch
+	launch      map[string]time.Time // single-use launch nonces -> expiry
+	launchTTL   time.Duration
 	hw          *platform.Hardware
 	unsupported string
 	hosts       map[string]bool
@@ -69,7 +73,7 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 	if cfg.Log == nil {
 		cfg.Log = func(string) {}
 	}
-	s := &Server{cfg: cfg, ctx: ctx, tn: cfg.Store.ForTenant(id), jobs: newJobs(), hosts: map[string]bool{}}
+	s := &Server{cfg: cfg, ctx: ctx, tn: cfg.Store.ForTenant(id), jobs: newJobs(), hosts: map[string]bool{}, launch: map[string]time.Time{}, launchTTL: 15 * time.Minute}
 	s.engine = &reco.Engine{CanIRun: cfg.CanIRun, HF: cfg.HF, Cache: storeCache{s.tn}}
 	if err := s.refreshHW(ctx); err != nil && !errors.Is(err, platform.ErrUnsupported) {
 		return nil, err
@@ -109,6 +113,46 @@ func (s *Server) Status() (phase string, job *JobInfo) {
 func (s *Server) Subscribe() (replay []SSEEvent, ch <-chan SSEEvent, unsub func()) {
 	r, c, u := s.jobs.subscribe(0)
 	return r, c, u
+}
+
+// LaunchToken returns a fresh single-use, expiring nonce for the browser hand-off URL. The session token itself
+// never appears in a URL, argv or terminal: a snooper who sees the link (ps, history) gets a value that is
+// spent the moment the real browser uses it.
+func (s *Server) LaunchToken() string {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		panic(err) // crypto/rand failure is unrecoverable
+	}
+	n := hex.EncodeToString(b)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now()
+	for k, exp := range s.launch { // drop expired, and cap outstanding links
+		if now.After(exp) {
+			delete(s.launch, k)
+		}
+	}
+	for len(s.launch) >= 8 {
+		var oldest string
+		var oe time.Time
+		for k, exp := range s.launch {
+			if oldest == "" || exp.Before(oe) {
+				oldest, oe = k, exp
+			}
+		}
+		delete(s.launch, oldest)
+	}
+	s.launch[n] = now.Add(s.launchTTL)
+	return n
+}
+
+// consumeLaunch spends a nonce; it returns true at most once per nonce and never after expiry.
+func (s *Server) consumeLaunch(n string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	exp, ok := s.launch[n]
+	delete(s.launch, n)
+	return ok && time.Now().Before(exp)
 }
 
 // SetPort registers the listening port so the Host allow-list can be enforced.
@@ -244,11 +288,11 @@ func (s *Server) auth(next http.Handler) http.Handler {
 	})
 }
 
-// handleStatic serves the SPA. A valid ?t= token is exchanged for the session cookie and stripped from the URL.
+// handleStatic serves the SPA. A valid single-use ?t= launch nonce is exchanged for the session cookie and stripped from the URL.
 func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
 	if t := r.URL.Query().Get("t"); t != "" {
-		if s.tokenOK(t) {
-			http.SetCookie(w, &http.Cookie{Name: CookieName, Value: t, Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode})
+		if s.consumeLaunch(t) {
+			http.SetCookie(w, &http.Cookie{Name: CookieName, Value: s.cfg.Token, Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode})
 		}
 		q := r.URL.Query()
 		q.Del("t")

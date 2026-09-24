@@ -103,15 +103,16 @@ func run(port int, noTUI, noOpen bool) error {
 			log.Print("server: ", err)
 		}
 	}()
-	url := fmt.Sprintf("http://127.0.0.1:%d/?t=%s", actual, token)
+	// each link carries a fresh single-use nonce, never the session token
+	link := func() string { return fmt.Sprintf("http://127.0.0.1:%d/?t=%s", actual, srv.LaunchToken()) }
 	if !noOpen {
-		openBrowser(url)
+		openBrowser(link())
 	}
 
 	if noTUI {
-		fmt.Printf("aituner running. Open: %s\n", url)
+		fmt.Printf("aituner running. Open (single-use link): %s\n", link())
 		<-ctx.Done()
-	} else if err := runTUI(ctx, stop, srv, url, func() { openBrowser(url) }); err != nil {
+	} else if err := runTUI(ctx, stop, srv, link); err != nil {
 		return err
 	}
 	stop()

@@ -175,7 +175,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDetect(w http.ResponseWriter, r *http.Request) {
-	if s.jobs.info() != nil && s.jobs.info().Running {
+	if j := s.jobs.info(); j != nil && j.Running {
 		writeErr(w, http.StatusConflict, "busy", ErrBusy.Error())
 		return
 	}

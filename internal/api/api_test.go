@@ -122,9 +122,13 @@ func TestOriginRequiredOnMutations(t *testing.T) {
 	}
 }
 
-func TestTokenExchangeSetsHardenedCookie(t *testing.T) {
+func TestLaunchLinkIsSingleUseAndSetsHardenedCookie(t *testing.T) {
 	e := newEnv(t)
-	r, _ := e.do(t, "GET", "/?t="+token, "", nil)
+	n := e.s.LaunchToken()
+	if n == token || len(n) < 32 {
+		t.Fatalf("launch nonce must be distinct from the session token and long: %q", n)
+	}
+	r, _ := e.do(t, "GET", "/?t="+n, "", nil)
 	if r.StatusCode != 302 || r.Header.Get("Location") != "/" {
 		t.Fatalf("redirect: %d %q", r.StatusCode, r.Header.Get("Location"))
 	}
@@ -132,9 +136,48 @@ func TestTokenExchangeSetsHardenedCookie(t *testing.T) {
 	if len(c) != 1 || !c[0].HttpOnly || c[0].SameSite != http.SameSiteStrictMode || c[0].Value != token {
 		t.Fatalf("cookie: %+v", c)
 	}
-	r, _ = e.do(t, "GET", "/?t=wrong", "", nil)
-	if len(r.Cookies()) != 0 {
-		t.Fatal("wrong token must not set a cookie")
+	// the nonce is spent: replaying it must not mint a session
+	if r, _ = e.do(t, "GET", "/?t="+n, "", nil); len(r.Cookies()) != 0 {
+		t.Fatal("a launch link must work exactly once")
+	}
+}
+
+func TestSessionTokenIsNotAcceptedInURL(t *testing.T) {
+	e := newEnv(t)
+	if r, _ := e.do(t, "GET", "/?t="+token, "", nil); len(r.Cookies()) != 0 {
+		t.Fatal("the session token must never be usable (or expected) in a URL")
+	}
+	if r, _ := e.do(t, "GET", "/?t=wrong", "", nil); len(r.Cookies()) != 0 {
+		t.Fatal("wrong nonce must not set a cookie")
+	}
+}
+
+func TestLaunchLinkExpires(t *testing.T) {
+	e := newEnv(t)
+	e.s.mu.Lock()
+	e.s.launchTTL = time.Millisecond
+	e.s.mu.Unlock()
+	n := e.s.LaunchToken()
+	time.Sleep(20 * time.Millisecond)
+	if r, _ := e.do(t, "GET", "/?t="+n, "", nil); len(r.Cookies()) != 0 {
+		t.Fatal("expired link accepted")
+	}
+}
+
+func TestOutstandingLaunchLinksAreCapped(t *testing.T) {
+	e := newEnv(t)
+	first := e.s.LaunchToken()
+	for i := 0; i < 20; i++ {
+		e.s.LaunchToken()
+	}
+	e.s.mu.Lock()
+	n := len(e.s.launch)
+	e.s.mu.Unlock()
+	if n > 8 {
+		t.Fatalf("outstanding links unbounded: %d", n)
+	}
+	if r, _ := e.do(t, "GET", "/?t="+first, "", nil); len(r.Cookies()) != 0 {
+		t.Fatal("evicted link still accepted")
 	}
 }
 

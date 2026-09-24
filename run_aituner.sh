@@ -37,7 +37,7 @@ say "toolchain: $(go version | cut -d' ' -f3), node $(node --version), $(python3
 
 # Web UI: rebuild when sources, lockfile or config are newer than the build.
 stamp=internal/webui/dist/index.html
-if [ ! -f "$stamp" ] || [ -n "$(find web/src web/index.html web/public web/package.json web/package-lock.json web/vite.config.js -newer "$stamp" -type f 2>/dev/null | head -1)" ]; then
+if [ ! -f "$stamp" ] || [ -n "$(find web/src web/index.html web/public web/package.json web/package-lock.json web/vite.config.js web/jsconfig.json -newer "$stamp" -type f 2>/dev/null | head -1)" ]; then
   say "building web UI"
   (cd web
    if [ ! -d node_modules ] || [ package-lock.json -nt node_modules ]; then npm ci --no-audit --no-fund; fi
