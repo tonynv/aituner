@@ -12,6 +12,10 @@ aituner opens a local web UI and walks through five steps, in order:
    Apple-Silicon (MLX) build that loads on your machine, and estimate its speed from what you measured. Community
    "unrestricted" (abliterated/uncensored) variants are included by default and can be switched off.
 
+Each recommendation shows how your memory budget is used once the model loads (weights, runtime, and the room left for
+KV cache, with the context length that fits), can be viewed as a grid or a list, and has a **Download** button that saves it
+to a folder you choose (default `~/Models`, changeable on the page). Downloads are verified file by file and can be resumed.
+
 The server enforces this order. Asking for recommendations early returns `409 wrong_phase`.
 
 **Status:** macOS on Apple Silicon. Linux is designed for (`internal/platform`) but not implemented; the launcher and
@@ -59,7 +63,9 @@ aituner can change system settings, so the local server is locked down:
 - Outbound traffic is limited to canirun.ai and huggingface.co over HTTPS, with timeouts, size caps and retries.
 - Model downloads are safetensors/config/tokenizer only, never `*.py` or pickle; `trust_remote_code` is never enabled.
   Repo names from third parties are validated before they can appear in a copy-paste command.
-- Data lives in a `0700` directory; the database and lock file are `0600`. Only one aituner can run at a time.
+- Data lives in a `0700` directory; the database, lock and log files are `0600`. Only one aituner can run at a time. State-changing requests are audit-logged.
+- The download folder must be inside your home directory or on an external drive, with no hidden or `~/Library` paths; only models the
+  recommender offered can be downloaded, and only weights/config/tokenizer files are fetched.
 
 `SPECS/SPEC.md` §10 has the full model. Note the open decision D1: SQLite has no Row Level Security, so tenant
 isolation is enforced in the data layer instead.
@@ -78,6 +84,6 @@ macOS detection) · `internal/bench` (suites) · `internal/tune` (plan/apply/rev
 
 ## Uninstall
 
-Quit aituner, then delete `~/Library/Application Support/aituner/`. If you applied persistence options, revert them
+Quit aituner, then delete `~/Library/Application Support/aituner/`. Downloaded models stay in your models folder (default `~/Models`); delete them yourself if you no longer want them. If you applied persistence options, revert them
 in the UI first (or remove `/Library/LaunchDaemons/ai.aituner.wiredlimit.plist` and
 `~/Library/LaunchAgents/ai.aituner.ollama-env.plist`). Cached models live in `~/.cache/huggingface`.

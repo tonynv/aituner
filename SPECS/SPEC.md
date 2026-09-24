@@ -165,6 +165,29 @@ bandwidth, measured tok/s.
    Z-Image-Turbo command is quoted (the one shown in the README); others link to the README. No speed estimate for images. Already-installed Ollama models
    are marked as installed.
 
+6. **KV-cache meter** — for every MLX candidate and variant the model's real `config.json` is fetched from Hugging Face
+   (cached) and the KV cache is computed **per layer type**: full-attention layers grow with context
+   (`2 x kv_heads x head_dim x 2 B` per token per layer; `head_dim`/`kv_heads` from the config, global-layer overrides
+   honoured), sliding-window layers cost a constant `window x ...` once full, linear-attention/convolution layers keep a
+   small constant state that is **not counted** (noted in the UI). Multi-head-latent-attention and configs missing needed fields
+   are reported as *unknown* with the reason, never guessed. Where a config has no `layer_types`, all layers are assumed full
+   length, which can only under-state the context that fits. Room = `budget - weights - 1 GiB runtime overhead`; tokens that fit
+   are computed for an fp16 KV cache and an 8-bit one (8 bits + fp16 scale/bias per 64-group), capped at the model's
+   `max_position_embeddings`. The UI draws weights / runtime / KV room (and spare) to scale. **[VERIFIED]** against 6 real
+   configs (dense, hybrid, sliding+global, conv hybrid; Llama-3.1-8B = 128 KiB/token exactly), fuzzed, and live on 12 models.
+7. **Downloads** — the *Download* button saves a recommended MLX repo into the user's **models folder**
+   (`<folder>/<org>/<name>`, default `~/Models`, configurable in the UI, stored per tenant in the datastore). Only repos the
+   recommender just offered can be downloaded (no general fetch endpoint), only when recommendations are unlocked, never while a
+   benchmark/tuning job runs (and benchmarks are refused while a download runs) so numbers stay valid. Files: weights, config,
+   tokenizer only (`*.json *.safetensors *.model *.tiktoken *.txt *.jinja *.jsonl`; never `*.py`, pickle, `.bin`); gated and
+   pickle-only repos refused; free space checked up front (`remaining + 2% + 512 MiB`); progress from bytes on disk; cancel keeps
+   partial files and a later attempt **resumes**; on completion **every file is verified against Hugging Face's listed size** and a
+   marker `.aituner-model.json` is written, so "downloaded" survives restarts. The UI then shows the local path and a command that
+   runs the local copy. **[VERIFIED]**: a real download was loaded and generated text with mlx-lm from the folder; cancel/resume tested.
+   **Folder policy** (`internal/modeldir`): absolute path, inside `$HOME` or under `/Volumes/<drive>/...`; symlinks resolved before the
+   check; no hidden (dot) component, not `~/Library`, not the home or drive root, no control characters, <=1024 chars; the folder is
+   created and proven writable before it is saved.
+
 Memory budget = the larger of Metal's recommended working set and an explicit `iogpu.wired_limit_mb`, read from the
 *current* system (a reverted tune is not credited). Lookups are cached 6 h in the datastore; stale cache is served if the
 network fails; otherwise the UI shows the error — never invented data.
@@ -241,6 +264,9 @@ are reported honestly in `TASKS.md`.
   copy-paste command; commands use the venv's absolute, single-quoted path.
 - **PWA:** manifest + icons verified at declared sizes, service worker is network-first, never caches `/api/`, prunes stale
   hashed assets; offline reload shows the cached shell with a clear banner (all verified in Chrome).
+- **Audit log:** every authenticated state-changing request (and every download request with repo and destination) is written to
+  `aituner.log` (`0600`, moved aside at 5 MB) so any action can be attributed afterwards. The UI asks for confirmation before "New
+  run" because it relocks the recommendations.
 - **Fuzzing:** Go native fuzz targets for the command builder, name matchers, estimator, thermal/load parsers, system_profiler
   parser and the admin-script allow-list (fuzzing found and fixed an estimator returning negative speed for invalid input).
 

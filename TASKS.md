@@ -17,6 +17,7 @@ Legend: [x] done, [~] partial, [ ] not done. Build order: DataStore -> API -> UI
 - [x] T8 Bubble Tea v2 TUI, run_aituner.sh preflight, single-instance lock, --version
 - [x] T9 Quality: -race, govulncheck, npm audit, svelte-check, fuzzing, live contract tests, fault injection (cancel), PWA/offline in Chrome
 - [x] T10 Release gates run by independent agents: code review, security, UI/UX, deps, manager, QA (findings fixed)
+- [x] T12 KV-cache meter (per-layer-type KV from real configs), list/grid views, configurable models folder, verified resumable downloads, audit log, New-run confirmation
 - [ ] T11 Linux implementation (out of scope for now; `platform` returns ErrUnsupported)
 
 ## Needs the owner
