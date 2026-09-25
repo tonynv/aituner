@@ -58,12 +58,12 @@
   {/each}
 
   {#if done.length}
-    <div class="ready">
-      <div class="faint small">Downloaded</div>
+    <details class="ready" open={done.length <= 3}>
+      <summary class="faint small">Downloaded ({done.length})</summary>
       {#each done as i (i.repo)}
         <div class="row between"><span class="mono name">{i.repo}</span><span class="badge ok"><Icon name="check" size={12} /> ready</span></div>
       {/each}
-    </div>
+    </details>
   {/if}
   {#if err}<p class="bad small" role="alert">{err}</p>{/if}
 </section>
@@ -71,7 +71,10 @@
 <style>
   .between { justify-content: space-between; }
   .item { display: grid; gap: 8px; padding: 12px 0; border-top: 1px solid var(--border); }
-  .ready { display: grid; gap: 8px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .ready { padding-top: 8px; border-top: 1px solid var(--border); }
+  .ready > div { margin-top: 8px; }
+  .ready summary { min-height: 36px; display: flex; align-items: center; cursor: pointer; }
+  @media (pointer: coarse) { .ready summary { min-height: var(--tap); } }
   .name { min-width: 0; word-break: break-all; font-size: 13px; }
   .small { font-size: 13px; }
   .bad { color: var(--bad); margin: 0; }

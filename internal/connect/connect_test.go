@@ -379,7 +379,7 @@ func TestClaudeLauncherExportsTheRightEnvironment(t *testing.T) {
 	}
 	s := string(out)
 	for _, want := range []string{"ANTHROPIC_BASE_URL=" + gw.URL, "ANTHROPIC_AUTH_TOKEN=" + env.Key, "ANTHROPIC_MODEL=the-model", "ANTHROPIC_DEFAULT_HAIKU_MODEL=the-model",
-		"CLAUDE_CODE_MAX_CONTEXT_TOKENS=65536", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1", "ARGS:--bare --settings", "--flag value"} {
+		"CLAUDE_CODE_MAX_CONTEXT_TOKENS=65536", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1", "ARGS:--bare --strict-mcp-config --settings", "--flag value"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("missing %q in:\n%s", want, s)
 		}

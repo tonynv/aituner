@@ -50,12 +50,13 @@ if [ "${CTX:-0}" -gt 0 ]; then export CLAUDE_CODE_MAX_CONTEXT_TOKENS="$CTX"; fi
 echo "aituner: Claude Code -> local model $MODEL (context ${CTX:-unknown} tokens)" >&2
 # Claude Code's normal request is ~27,000 tokens (its tool list, skills, MCP servers, CLAUDE.md and hooks), and a local model
 # reads prompts at a few hundred tokens/s, so every cold turn would take over a minute. --bare sends ~1,700 tokens (Bash, Read
-# and Edit only; no hooks, skills, MCP, CLAUDE.md, auto-memory) and the attribution setting keeps commit/PR text free of
+# and Edit only; no hooks, skills, CLAUDE.md, auto-memory) and --strict-mcp-config keeps your configured MCP servers out of an
+# interactive session (their tools alone were ~5,000 tokens) and the attribution setting keeps commit/PR text free of
 # co-author lines. Set AITUNER_CLAUDE_FULL=1 for the complete Claude Code experience (slow on a local model).
 if [ "${AITUNER_CLAUDE_FULL:-0}" = 1 ]; then
   exec claude "$@"
 fi
-exec claude --bare --settings '{"attribution":{"commit":"","pr":""}}' "$@"
+exec claude --bare --strict-mcp-config --settings '{"attribution":{"commit":"","pr":""}}' "$@"
 `
 }
 
