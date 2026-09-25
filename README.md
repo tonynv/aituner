@@ -16,6 +16,13 @@ Each recommendation shows how your memory budget is used once the model loads (w
 KV cache, with the context length that fits), can be viewed as a grid or a list, and has a **Download** button that saves it
 to a folder you choose (default `~/Models`, changeable on the page). Downloads are verified file by file and can be resumed.
 
+After you have a model downloaded there is a sixth view, **Run**: it installs or updates MLX for Mac, starts the model, shows the
+connection details, and has a card per tool (**Claude Code, VS Code, Neovim, Vim + tmux**, or any OpenAI-compatible tool). Choosing a
+tool shows exactly what will be installed and changed, asks once, then installs and configures it and verifies it, so you can open
+your project and start coding. Each tool gets its own isolated profile: your own editor settings and dotfiles are never modified.
+Numbers from every benchmark are pinned across the top of every view, and the **Report** view charts every trial, explains the
+figures, compares runs and exports JSON, Markdown or CSV.
+
 The server enforces this order. Asking for recommendations early returns `409 wrong_phase`.
 
 **Status:** macOS on Apple Silicon. Linux is designed for (`internal/platform`) but not implemented; the launcher and
@@ -50,6 +57,20 @@ Only what you approve in step 3, and each change can be reverted from the UI:
 
 Tuning is judged by the re-run. A change that does not help, or makes things slower, is reported as such; on the
 reference machine the Ollama change measured about 9% slower and the tool said so.
+
+## Connect your editor
+
+The model runs in `mlx_lm.server` on an internal port. Editors talk to aituner's **gateway** (`127.0.0.1:8747`), which needs an API
+key, only forwards a safe set of request fields (so a client can never make the server load another model), and speaks both the
+OpenAI API and Anthropic's Messages API (which Claude Code needs). Note that Anthropic does not support routing Claude Code to
+non-Claude models: it works, but small local models are slow on its large prompts and unreliable at tool use.
+
+| Tool | What "Set up" does |
+|---|---|
+| Claude Code | `aituner-claude` launcher (env vars for one run; `~/.claude` untouched); installs via `brew install --cask claude-code` if missing |
+| VS Code | isolated profile with Continue and the Claude Code extension; launcher `aituner-code` |
+| Neovim | `NVIM_APPNAME=aituner-nvim` profile with lazy.nvim + CodeCompanion; launcher `aituner-nvim` |
+| Vim + tmux | Homebrew Vim (system Vim has no Python) + vim-ai, tmux layout with a chat pane and the model log; sources your `~/.vimrc` read-only |
 
 ## Security model
 

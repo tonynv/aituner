@@ -272,7 +272,7 @@ are reported honestly in `TASKS.md`.
 
 ## 16. Phase 2: reporting, pinned stats, serve a model, connect your editor
 
-Status: **design**, implemented in the order below; each part is marked done in TASKS.md when verified. Everything
+Status: **implemented** (P1-P10 in TASKS.md); §16.5 lists what real runs revealed and what is still unverified. Everything
 here follows the same rules: real measurements, nothing simulated, additive and reversible, never touching the user's own
 dotfiles (`~/.vimrc` and `~/.tmux.conf` on the reference machine are symlinks into a git-tracked dotfiles repo).
 
@@ -341,6 +341,43 @@ Gateway and model server bind loopback only; key required on every gateway reque
 reachable except through the gateway; setup jobs run only fixed, allow-listed commands (argv, no shell) with values from aituner's
 own state (paths validated by `modeldir`, model ids by `ValidRepo`); launcher scripts are generated from constants plus quoted
 paths and never overwrite foreign files; every setup action is audit-logged; removal restores the previous state exactly.
+
+### 16.5 What real runs revealed (and how the design changed)
+
+These were found by running the real tools, not by design; each has a regression test.
+
+- **Benchmark validity.** Bandwidth measured after other GPU work swung 5-30% because earlier allocations fragment MLX's cache
+  (a clean process is stable to ~1%; clearing the cache made it worse). Fix: bandwidth **first**, matmul next, the sustained run
+  **last**, time-based warm-up. Trial spread across three back-to-back full runs: +-0.8%, +-2.9%, +-5.2%.
+- **`mlx_lm.server` loads any model a request names** (and honours `draft_model`/adapter fields). The gateway therefore forwards
+  requests only through a field allow-list and pins `model` to `default_model`; the server also runs with `HF_HUB_OFFLINE=1`.
+  Verified live: a request naming another model fails and the server stays up on the original.
+- **Tool calls are not reliably structured.** Real captures: Llama 3.1 returns `<|python_tag|>{...}` as plain text; Qwen2.5-Coder
+  returns a fenced ```` ```json ```` block and leaks `<|im_end|>`. The gateway recovers calls from text (Hermes `<tool_call>`, python
+  tag, fenced JSON, bare JSON) **only for names the client declared**, in streaming too (holding back only text that might be a
+  call), and strips control tokens.
+- **Claude Code specifics** (found by running the real CLI): it sends `system`-role entries *inside* `messages` (merged into one
+  leading system message); it warns about an unknown model window unless `CLAUDE_CODE_MAX_CONTEXT_TOKENS` is set (the launcher sets
+  it from the model's real context); it sends ~15K tokens per turn, so an 8B model needs about a minute to first token and
+  answered a one-word request with an invalid tool call: a limit of small models, not of the plumbing. The UI says so.
+- **A gateway created before the model starts** froze empty model info; model name and context window are now evaluated per request.
+- **Process lifetime.** A killed harness left an orphaned `mlx_lm.server` holding GPU memory. The server now stops with aituner's
+  context (quit or SIGTERM), a pidfile lets the next launch stop a stale one (only if the process is verifiably ours), and
+  quitting aituner was verified to leave 0 model-server processes.
+- **The user's own files are hostile territory.** The reference `~/.vimrc` has an error (missing colour scheme) that makes silent
+  Vim exit 1; verification now checks aituner's part strictly without it and reports the user's error as a note. Launchers
+  *append* to PATH so they never change which tool resolves.
+- **Neovim adapter verification** resolves the plugin's adapter exactly as it does at request time, including the `cmd:cat <keyfile>`
+  secret (URL, model and a 56-character key checked).
+
+Verified end to end on the reference machine (real model, real installs): Claude Code launcher (env, model, context), VS Code
+isolated profile (both extensions installed, configs valid), Neovim (`brew install neovim`, plugins synced, adapter resolves the key,
+launch in Terminal with `NVIM_APPNAME`), Vim (real `:AI` round trip returned the model's reply), tmux layout on an isolated tmux
+server, the terminal chat client, Anthropic- and OpenAI-format requests.
+
+**Not verified:** the VS Code extensions' own chat UIs (Continue, Claude Code) were not driven; a CodeCompanion chat *inside*
+Neovim was not driven (its adapter resolution, including the key, was); interactive tmux attach; a full Claude Code *agentic* session
+with tool use on a large model. Expect small local models to be unreliable at agentic tool use.
 
 ## 15. Measured on the reference machine, and known gaps
 

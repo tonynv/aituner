@@ -202,8 +202,9 @@
 <style>
   .between { justify-content: space-between; } .stack.tight { gap: 12px; }
   .fields { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); }
-  label { display: grid; gap: 6px; font-size: 13px; color: var(--muted); }
-  select, input { min-height: var(--tap); padding: 0 10px; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--bg); color: var(--text); font: 14px var(--font-sans); max-width: 100%; }
+  .fields label:first-child { grid-column: 1 / -1; } /* the model name is long: give it a full row */
+  label { display: grid; gap: 6px; font-size: 13px; color: var(--muted); min-width: 0; }
+  select, input { width: 100%; min-width: 0; min-height: var(--tap); padding: 0 10px; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--bg); color: var(--text); font: 14px var(--font-sans); max-width: 100%; }
   input { font-family: var(--font-mono); font-size: 13px; }
   .proj { max-width: 720px; }
   .cards { grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); }

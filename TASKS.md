@@ -21,12 +21,12 @@ Legend: [x] done, [~] partial, [ ] not done. Build order: DataStore -> API -> UI
 - [ ] T11 Linux implementation (out of scope for now; `platform` returns ErrUnsupported)
 
 ## Phase 2 (SPEC section 16), in order
-- [ ] P1 Richer benchmark suites (prompt sweep, context depth, TTFT, sustained/throttle) + derived roofline/utilisation
-- [ ] P2 Report tab (charts, history, compare, export JSON/MD/CSV) + pinned stats bar on every tab
-- [ ] P3 Model server manager (mlx_lm.server) + MLX install/update action
-- [ ] P4 Gateway: API key, OpenAI proxy, Anthropic Messages translation (streaming + tools) with real-model tests
-- [ ] P5 Run tab UI (runtime, start/stop, endpoint details, logs)
-- [ ] P6 Claude Code setup   - [ ] P7 VS Code setup   - [ ] P8 Neovim setup   - [ ] P9 Vim + tmux setup   - [ ] P10 generic endpoint
+- [x] P1 Richer benchmark suites (prompt sweep, context depth, TTFT, sustained/throttle) + derived roofline/utilisation; GPU test order/warm-up fixed
+- [x] P2 Report view (honest charts, history, compare, export JSON/MD/CSV) + pinned stats bar on every tab
+- [x] P3 Model server manager (mlx_lm.server, offline-only, pidfile/reaping, log file) + MLX install/update action
+- [x] P4 Gateway: API key, model-pinned allow-listed OpenAI proxy, Anthropic Messages translation (streaming, tools, tolerant tool-call recovery), tested on real captures
+- [x] P5 Run view (runtime, start/stop, connection details, logs, serving chip)
+- [x] P6 Claude Code   - [x] P7 VS Code (isolated profile)   - [x] P8 Neovim (own NVIM_APPNAME)   - [x] P9 Vim + tmux   - [x] P10 generic OpenAI endpoint
 - [ ] P11 Review gates (code, security, UI/UX, QA) on the new surfaces; docs
 
 ## Needs the owner
