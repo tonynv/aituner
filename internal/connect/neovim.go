@@ -138,22 +138,24 @@ func (neovim) Setup(ctx context.Context, env Env, emit Emit) error {
 		return fmt.Errorf("plugin installation failed: %w", err)
 	}
 	// verify: the plugin loads and the adapter resolves to the gateway with the model we configured
+	// resolve the adapter exactly as CodeCompanion does at request time, including the `cmd:cat <keyfile>` secret
 	check := `local ok, cc = pcall(require, "codecompanion")
 if not ok then io.stderr:write("VERIFY_FAIL codecompanion did not load: " .. tostring(cc) .. "\n") vim.cmd("cquit 1") end
-local cfg = require("codecompanion.config")
-local a = cfg.adapters and cfg.adapters.http and cfg.adapters.http.aituner
-if not a then io.stderr:write("VERIFY_FAIL the aituner adapter is not configured\n") vim.cmd("cquit 2") end
 local ok2, ad = pcall(require("codecompanion.adapters").resolve, "aituner")
-if not ok2 or type(ad) ~= "table" then io.stderr:write("VERIFY_FAIL the adapter does not resolve: " .. tostring(ad) .. "\n") vim.cmd("cquit 3") end
-io.stderr:write("VERIFY_OK adapter=" .. tostring(ad.name) .. " url=" .. tostring(ad.env and ad.env.url) .. " model=" .. tostring(ad.schema and ad.schema.model and ad.schema.model.default) .. "\n")`
+if not ok2 or type(ad) ~= "table" then io.stderr:write("VERIFY_FAIL the aituner adapter does not resolve: " .. tostring(ad) .. "\n") vim.cmd("cquit 2") end
+require("codecompanion.adapters.utils").get_env_vars(ad, { timeout = 5000 })
+local e = ad.env_replaced or {}
+local key = e.api_key or ""
+if #key < 20 then io.stderr:write("VERIFY_FAIL the API key did not resolve from the key file\n") vim.cmd("cquit 3") end
+io.stderr:write("VERIFY_OK adapter=" .. tostring(ad.name) .. " url=" .. tostring(e.url) .. " model=" .. tostring(ad.schema and ad.schema.model and ad.schema.model.default) .. " key=resolved\n")`
 	var verified strings.Builder
 	if err := env.Run.Run(ctx, func(l string) { verified.WriteString(l + "\n"); emit(l) }, "", nenv, nvim, "--headless", "-c", "lua "+strings.ReplaceAll(check, "\n", " "), "-c", "qa"); err != nil {
 		return fmt.Errorf("verification failed: %w", err)
 	}
-	if !strings.Contains(verified.String(), "VERIFY_OK") || !strings.Contains(verified.String(), env.RootURL) {
+	if !strings.Contains(verified.String(), "VERIFY_OK") || !strings.Contains(verified.String(), env.RootURL) || !strings.Contains(verified.String(), "key=resolved") || !strings.Contains(verified.String(), env.Model) {
 		return fmt.Errorf("verification failed: the adapter did not resolve to %s (%s)", env.RootURL, strings.TrimSpace(verified.String()))
 	}
-	emit("Verified: CodeCompanion loads and its aituner adapter points at your gateway")
+	emit("Verified: CodeCompanion loads, and its aituner adapter resolves your gateway address, model and API key")
 	if model, err := Probe(ctx, env, true); err != nil {
 		emit("Note: end-to-end check skipped: " + err.Error())
 	} else {

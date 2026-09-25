@@ -23,6 +23,8 @@ type recorder struct {
 	cmds   []string
 	env    Env
 	failOn string
+	// vimrcErrors makes Vim exit non-zero when it loads the user-sourcing profile, as a real vimrc with an error does
+	vimrcErrors bool
 }
 
 func (r *recorder) Look(name string) (string, bool) {
@@ -50,16 +52,20 @@ func (r *recorder) Run(ctx context.Context, emit Emit, dir string, env []string,
 		os.MkdirAll(filepath.Join(dest, ".git"), 0o755)
 		os.WriteFile(filepath.Join(dest, "plugin", "vim-ai.vim"), []byte(`" plugin`), 0o644)
 	case base == "vim" && contains(args, "-es"):
+		defer func() {}()
 		for i, a := range args {
 			if a == "-c" && i+1 < len(args) && strings.HasPrefix(args[i+1], "redir!") {
 				out := strings.Fields(args[i+1])[2]
 				os.WriteFile(out, []byte("2 1\n"), 0o644)
 			}
 		}
+		if r.vimrcErrors && len(args) > 1 && args[1] == vimRC(r.env) {
+			return errors.New("vim failed: exit status 1") // the user's own vimrc has an error; the aituner part still loaded
+		}
 	case base == "nvim" && contains(args, "--headless") && len(args) > 2 && strings.HasPrefix(args[1], "+Lazy"):
 		os.MkdirAll(filepath.Join(nvimData(r.env), "lazy", "codecompanion.nvim"), 0o755)
 	case base == "nvim" && contains(args, "-c"):
-		emit("VERIFY_OK adapter=aituner url=" + r.env.RootURL + " model=" + r.env.Model)
+		emit("VERIFY_OK adapter=aituner url=" + r.env.RootURL + " model=" + r.env.Model + " key=resolved")
 	}
 	return nil
 }
@@ -484,4 +490,44 @@ func TestVimTmuxSetupWritesAnIsolatedProfileThatSourcesTheUsersVimrcReadOnly(t *
 	if b, _ := os.ReadFile(filepath.Join(env.Home, ".vimrc")); string(b) != "set number\n" {
 		t.Fatal("remove touched the user's vimrc")
 	}
+}
+
+// Found on the reference machine: the user's own ~/.vimrc has an error (missing colour scheme), which makes silent Vim
+// exit 1. That must be reported as a note, never fail aituner's setup, but a broken aituner part must still fail.
+func TestVimSetupToleratesErrorsInTheUsersOwnVimrcButNotInItsOwnPart(t *testing.T) {
+	env, rec := testEnv(t, allTools)
+	fake := filepath.Join(t.TempDir(), "vim")
+	os.WriteFile(fake, []byte("#!/bin/sh\n"), 0o755)
+	env.VimPaths = []string{fake}
+	rec.vimrcErrors = true
+	var log []string
+	if err := (vimTmux{}).Setup(context.Background(), env, func(m string) { log = append(log, m) }); err != nil {
+		t.Fatalf("a problem in the user's vimrc must not fail the setup: %v", err)
+	}
+	if !strings.Contains(strings.Join(log, "\n"), "your own ~/.vimrc") {
+		t.Fatalf("the user must be told about it:\n%s", strings.Join(log, "\n"))
+	}
+	// and a strict-part failure (no :AI command) still fails
+	env2, _ := testEnv(t, allTools)
+	env2.VimPaths = []string{fake}
+	broken := &recorder{have: allTools, env: env2}
+	env2.Run = brokenVim{broken}
+	if err := (vimTmux{}).Setup(context.Background(), env2, func(string) {}); err == nil || !strings.Contains(err.Error(), "verification failed") {
+		t.Fatalf("a missing :AI command must fail verification: %v", err)
+	}
+}
+
+// brokenVim behaves like a Vim where the plugin did not load.
+type brokenVim struct{ *recorder }
+
+func (b brokenVim) Run(ctx context.Context, emit Emit, dir string, env []string, name string, args ...string) error {
+	if filepath.Base(name) == "vim" && contains(args, "-es") {
+		for i, a := range args {
+			if a == "-c" && i+1 < len(args) && strings.HasPrefix(args[i+1], "redir!") {
+				os.WriteFile(strings.Fields(args[i+1])[2], []byte("0 1\n"), 0o644)
+			}
+		}
+		return nil
+	}
+	return b.recorder.Run(ctx, emit, dir, env, name, args...)
 }

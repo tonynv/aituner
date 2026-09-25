@@ -39,14 +39,19 @@ func brewVim(env Env) (string, bool) {
 	return "", false
 }
 
-func vimrcContent(env Env) string {
+const vimSourceUser = `if filereadable(expand('~/.vimrc'))
+  source ~/.vimrc
+endif
+`
+
+func vimrcContent(env Env) string { return vimrcWith(env, vimSourceUser) }
+
+// vimrcWith builds the profile; verification uses a variant without the user's vimrc so it tests aituner's part strictly.
+func vimrcWith(env Env, userPart string) string {
 	return `" ` + Marker + `: Vim profile for the local model
 " Your own ~/.vimrc is sourced first, read-only, so your normal setup applies. Then vim-ai is pointed at the local gateway.
 set nocompatible
-if filereadable(expand('~/.vimrc'))
-  source ~/.vimrc
-endif
-set packpath^=` + vimRoot(env) + `
+` + userPart + `set packpath^=` + vimRoot(env) + `
 packloadall
 let g:vim_ai_token_file_path = ` + vimStr(env.KeyFile) + `
 let s:opts = {
@@ -192,18 +197,39 @@ func (vimTmux) Setup(ctx context.Context, env Env, emit Emit) error {
 	}
 	emit("wrote the Vim profile, aituner-vim, aituner-tmux and aituner-chat")
 
-	// verify: Vim (with the aituner vimrc) has Python and the :AI command
+	// verify aituner's part strictly (without the user's vimrc, whose own errors are not ours to fail on)
 	out := filepath.Join(env.ConfigDir, "vim", ".verify.out")
+	strict := filepath.Join(env.ConfigDir, "vim", ".verify.vimrc")
 	defer os.Remove(out)
-	script := "redir! > " + out + " | silent echo exists(':AI') . ' ' . has('python3') | redir END"
-	if err := env.Run.Run(ctx, emit, "", nil, vim, "-u", vimRC(env), "-es", "-c", script, "-c", "qa!"); err != nil {
-		return fmt.Errorf("verification failed: Vim did not start with the aituner profile: %w", err)
+	defer os.Remove(strict)
+	if err := os.WriteFile(strict, []byte(vimrcWith(env, "")), 0o600); err != nil {
+		return err
 	}
-	b, _ := os.ReadFile(out)
-	if got := strings.Fields(string(b)); len(got) != 2 || got[0] != "2" || got[1] != "1" {
-		return fmt.Errorf("verification failed: expected the :AI command (2) and Python (1), got %q", strings.TrimSpace(string(b)))
+	check := func(rc string) (string, error) {
+		os.Remove(out)
+		script := "redir! > " + out + " | silent echo exists(':AI') . ' ' . has('python3') | redir END"
+		err := env.Run.Run(ctx, emit, "", nil, vim, "-u", rc, "-es", "-c", script, "-c", "qa!")
+		b, _ := os.ReadFile(out)
+		return strings.TrimSpace(string(b)), err
 	}
-	emit("Verified: Vim starts with your vimrc plus vim-ai, Python is available and the :AI commands exist")
+	got, err := check(strict)
+	if err != nil {
+		return fmt.Errorf("verification failed: Vim did not start with the aituner settings: %w", err)
+	}
+	if f := strings.Fields(got); len(f) != 2 || f[0] != "2" || f[1] != "1" {
+		return fmt.Errorf("verification failed: expected the :AI command (2) and Python (1), got %q", got)
+	}
+	emit("Verified: Vim with vim-ai starts, Python is available and the :AI commands exist")
+	// then with the real profile, which also loads the user's own vimrc: its problems are reported, not blamed on us
+	if got, err := check(vimRC(env)); err != nil {
+		if f := strings.Fields(got); len(f) == 2 && f[0] == "2" && f[1] == "1" {
+			emit("Note: Vim reported an error while loading your own ~/.vimrc (for example a missing colour scheme or plugin). aituner's part loaded fine; the same message appears in your normal Vim.")
+		} else {
+			return fmt.Errorf("verification failed: the aituner profile does not load with your vimrc: %w", err)
+		}
+	} else {
+		emit("Verified: it also loads together with your own ~/.vimrc")
+	}
 	if bash, ok := env.Run.Look("bash"); ok {
 		for _, f := range []string{tmuxLauncher(env), vimLauncher(env), chatLauncher(env)} {
 			if err := env.Run.Run(ctx, emit, "", nil, bash, "-n", f); err != nil {
