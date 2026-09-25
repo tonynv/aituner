@@ -74,6 +74,10 @@ type Server struct {
 	unsupported string
 	hosts       map[string]bool
 
+	healthMu sync.Mutex // guards the live health sample, shared by callers for healthTTL so polling cannot pile up processes
+	health   platform.Health
+	healthAt time.Time
+
 	probeMu   sync.Mutex // guards the one-off Metal probe used when no benchmark has recorded the GPU budget
 	probedB   int64
 	probeFail time.Time
@@ -248,6 +252,7 @@ func (s *Server) Handler() http.Handler {
 	api := http.NewServeMux()
 	api.HandleFunc("GET /api/v1/state", s.handleState)
 	api.HandleFunc("GET /api/v1/events", s.handleEvents)
+	api.HandleFunc("GET /api/v1/health", s.handleHealth)
 	api.HandleFunc("POST /api/v1/detect", s.handleDetect)
 	api.HandleFunc("POST /api/v1/runs", s.handleNewRun)
 	api.HandleFunc("POST /api/v1/benchmark", s.handleBenchmark)

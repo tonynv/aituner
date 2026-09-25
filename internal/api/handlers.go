@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/tonynv/aituner/internal/bench"
 	"github.com/tonynv/aituner/internal/canirun"
@@ -179,6 +180,19 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		resp.Serving = &servingBrief{State: ss.State, Repo: ss.Repo}
 	}
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// healthTTL is how long one live sample is reused: pollers see fresh numbers without each request spawning samplers.
+const healthTTL = 2 * time.Second
+
+// handleHealth reports the machine's live state (load, memory, GPU utilisation, thermal, power) for the menu bar view.
+func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	s.healthMu.Lock()
+	defer s.healthMu.Unlock()
+	if time.Since(s.healthAt) > healthTTL {
+		s.health, s.healthAt = platform.CheckHealth(r.Context()), time.Now()
+	}
+	writeJSON(w, http.StatusOK, s.health)
 }
 
 func (s *Server) handleDetect(w http.ResponseWriter, r *http.Request) {

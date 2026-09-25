@@ -90,7 +90,7 @@ func (e *env) authed(extra map[string]string) map[string]string {
 
 func TestUnauthenticatedRefused(t *testing.T) {
 	e := newEnv(t)
-	for _, p := range []string{"/api/v1/state", "/api/v1/recommendations", "/api/v1/tune/plan", "/api/v1/events"} {
+	for _, p := range []string{"/api/v1/state", "/api/v1/health", "/api/v1/recommendations", "/api/v1/tune/plan", "/api/v1/events"} {
 		if r, _ := e.do(t, "GET", p, "", nil); r.StatusCode != 401 {
 			t.Errorf("%s: %d", p, r.StatusCode)
 		}
@@ -220,6 +220,30 @@ func TestStateShowsRealHardware(t *testing.T) {
 	}
 	if st.BenchPlan.Stage != "baseline" || len(st.BenchPlan.Downloads) == 0 {
 		t.Fatalf("temp data dir has no runtime, so downloads must be listed: %+v", st.BenchPlan)
+	}
+}
+
+func TestHealthIsLiveAndShared(t *testing.T) {
+	e := newEnv(t)
+	get := func() platform.Health {
+		r, b := e.do(t, "GET", "/api/v1/health", "", e.authed(nil))
+		if r.StatusCode != 200 {
+			t.Fatalf("%d %s", r.StatusCode, b)
+		}
+		var h platform.Health
+		if err := json.Unmarshal(b, &h); err != nil {
+			t.Fatal(err)
+		}
+		return h
+	}
+	h := get()
+	if h.Cores <= 0 || h.SpeedLimitPct <= 0 {
+		t.Fatalf("not a real sample: %+v", h)
+	}
+	at := e.s.healthAt
+	get()
+	if !e.s.healthAt.Equal(at) {
+		t.Fatal("a second request inside healthTTL sampled again")
 	}
 }
 
