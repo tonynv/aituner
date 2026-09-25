@@ -226,6 +226,7 @@
   .plan li { display: grid; grid-template-columns: 92px 1fr; gap: 12px; align-items: start; }
   .plan li > span:last-child { display: grid; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
   .plan .badge { justify-content: center; }
+  .plan .path { word-break: break-all; }
   dialog .end { justify-content: flex-end; }
   .fields { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); }
   .fields label:first-child { grid-column: 1 / -1; } /* the model name is long: give it a full row */
@@ -250,7 +251,8 @@
     <ul class="plan">
       {#each bsPlan.steps as st (st.id)}
         <li><span class="badge {st.action === 'none' ? 'ok' : st.action === 'unavailable' ? 'warn' : ''}">{actionLabel[st.action]}</span>
-          <span><strong>{st.name}</strong><span class="muted small mono">{st.detail}</span></span></li>
+          <span><strong>{st.name}</strong><span class="muted small">{st.detail}</span>
+            {#each st.items ?? [] as it (it)}<span class="small mono path">{it}</span>{/each}</span></li>
       {/each}
     </ul>
     {#if bsPlan.steps.some((x) => x.id === 'folders')}<p class="faint small">To use other folders, change them in Storage first.</p>{/if}

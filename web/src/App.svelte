@@ -76,13 +76,14 @@
     if (p) lastPhase = p;
   });
   const done = (tab) => tab === 'hardware' ? app.detected : tab === 'downloads' ? runReady : tab === 'setup' ? serving : PERF_TABS.includes(tab) && perfUnlocked(tab) && app.tab !== tab && phaseTab() !== tab;
-  const locked = (tab) => tab === 'setup' ? !runReady : PERF_TABS.includes(tab) ? !perfUnlocked(tab) : tab === 'report' ? !canReport : false;
+  // Setup is always open: Bootstrap and the MLX install live there; its model and editor parts wait for a download
+  const locked = (tab) => PERF_TABS.includes(tab) ? !perfUnlocked(tab) : tab === 'report' ? !canReport : false;
 </script>
 
 {#snippet navItem(s)}
   <li>
     <button class="item" class:current={app.tab === s.tab} disabled={locked(s.tab)} onclick={() => (app.tab = s.tab)} aria-current={app.tab === s.tab ? 'page' : undefined}
-      title={locked(s.tab) ? (s.tab === 'setup' ? 'Download a model first' : 'Available once the earlier performance step has run') : ''}>
+      title={locked(s.tab) ? 'Available once the earlier performance step has run' : ''}>
       <span class="tile" style:background="var(--tile-{s.tile})"><Icon name={s.icon} size={14} /></span>
       <span class="lbl">{s.label}</span>
       {#if locked(s.tab)}<span class="state" aria-label="locked"><Icon name="lock" size={12} /></span>

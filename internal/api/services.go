@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/tonynv/aituner/internal/bench"
 	"github.com/tonynv/aituner/internal/connect"
@@ -81,11 +80,14 @@ func (s *Server) handleServices(w http.ResponseWriter, r *http.Request) {
 // ---- bootstrap: install or update everything aituner needs, in one confirmed job -------------------------------------
 
 type bootstrapStep struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Action string `json:"action"` // install | update | none | unavailable
-	Detail string `json:"detail"`
+	ID     string   `json:"id"`
+	Name   string   `json:"name"`
+	Action string   `json:"action"` // create | install | update | none | unavailable
+	Detail string   `json:"detail"`
+	Items  []string `json:"items,omitempty"` // e.g. the folders to create, one per entry
 }
+
+var stepVerb = map[string]string{"create": "creating", "install": "installing", "update": "updating", "none": "already installed", "unavailable": "not available"}
 
 func (s *Server) bootstrapPlan(ctx context.Context) ([]bootstrapStep, string) {
 	hw := s.hardware()
@@ -94,7 +96,7 @@ func (s *Server) bootstrapPlan(ctx context.Context) ([]bootstrapStep, string) {
 	}
 	steps := []bootstrapStep{}
 	if missing := s.missingFolders(ctx); len(missing) > 0 {
-		steps = append(steps, bootstrapStep{ID: "folders", Name: "Folders", Action: "create", Detail: strings.Join(missing, ", ")})
+		steps = append(steps, bootstrapStep{ID: "folders", Name: "Folders", Action: "create", Detail: fmt.Sprintf("%d folder(s) that do not exist yet", len(missing)), Items: missing})
 	}
 	mlx := bootstrapStep{ID: "mlx", Name: "MLX and mlx-lm", Action: "install",
 		Detail: "a private Python environment in aituner's app data, then pip install -U mlx mlx-lm"}
@@ -172,10 +174,9 @@ func (s *Server) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 	err = s.jobs.start(s.ctx, "bootstrap", func(ctx context.Context, emit bench.Emit) error {
 		say := func(m string) { emit(bench.Event{Level: "info", Message: m}) }
 		for i, st := range steps {
-			say(fmt.Sprintf("[%d/%d] %s: %s", i+1, len(steps), st.Name, st.Action))
+			say(fmt.Sprintf("[%d/%d] %s: %s", i+1, len(steps), st.Name, stepVerb[st.Action]))
 			switch {
 			case st.Action == "none":
-				say("  already installed")
 			case st.Action == "unavailable":
 				emit(bench.Event{Level: "warn", Message: "  skipped: " + st.Detail})
 			case st.ID == "folders":

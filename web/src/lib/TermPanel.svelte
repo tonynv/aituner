@@ -42,8 +42,8 @@
   .term :global(.ok) { color: var(--ok); }
   .term :global(.bad) { color: var(--bad); }
   .term :global(.warnc) { color: var(--warn); }
-  .term :global(.line) { display: grid; grid-template-columns: 76px minmax(0, 1fr) auto 36px; gap: 12px; align-items: baseline; }
-  .term :global(.line.note) { grid-template-columns: 76px minmax(0, 1fr); }
+  .term :global(.line) { display: grid; grid-template-columns: max-content minmax(0, 1fr) auto 36px; gap: 12px; align-items: baseline; }
+  .term :global(.line.note) { grid-template-columns: max-content minmax(0, 1fr); }
   .term :global(.cmd) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .term :global(.res) { white-space: nowrap; text-align: right; }
   .term :global(.type) { animation: type 0.22s steps(18, end) both; }

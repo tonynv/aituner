@@ -507,9 +507,13 @@ func TestServicesAndBootstrapPlan(t *testing.T) {
 	if len(steps) != 3 || steps[0].(map[string]any)["id"] != "folders" || steps[1].(map[string]any)["id"] != "mlx" || steps[1].(map[string]any)["action"] != "install" {
 		t.Fatalf("%v", plan)
 	}
-	for _, name := range []string{"Models", "Reports", "KnowledgeBase"} {
-		if !strings.Contains(steps[0].(map[string]any)["detail"].(string), name) {
-			t.Fatalf("folders step must name %s: %v", name, steps[0])
+	items := steps[0].(map[string]any)["items"].([]any)
+	if len(items) != 3 {
+		t.Fatalf("folders step must list each folder: %v", steps[0])
+	}
+	for i, name := range []string{"Models", "Reports", "KnowledgeBase"} {
+		if filepath.Base(items[i].(string)) != name {
+			t.Fatalf("folder %d: %v", i, items[i])
 		}
 	}
 	if r, _ := e.do(t, "POST", "/api/v1/bootstrap", `{}`, e.authed(nil)); r.StatusCode != 400 {
