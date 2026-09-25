@@ -10,6 +10,7 @@
   import Run from './steps/Run.svelte';
   import Monitor from './steps/Monitor.svelte';
   import PinnedStats from './lib/PinnedStats.svelte';
+  import BootScan from './lib/BootScan.svelte';
   import { app, start, phaseTab, perfUnlocked, PERF_TABS, act } from './lib/app.svelte.js';
   import { api } from './lib/api.js';
 
@@ -32,6 +33,9 @@
     app.tab = 'hardware';
   }
   let systemDark = $state(true);
+  let scanning = $state(true);
+  function detected(state) { app.state = state; app.detected = true; }
+  function scanDone() { scanning = false; app.detected = true; }
 
   onMount(() => {
     try { const t = localStorage.getItem('aituner-theme'); if (t === 'dark' || t === 'light') theme = t; } catch { /* storage blocked */ }
@@ -40,8 +44,7 @@
     const onChange = (e) => (systemDark = e.matches);
     mq.addEventListener('change', onChange);
     const stop = start();
-    // every page load runs detection again, then shows the machine
-    api.detect().catch(() => {}).finally(() => { app.detected = true; });
+    // every page load runs detection again (shown by the start-up scan), then shows the machine
     return () => { mq.removeEventListener('change', onChange); stop(); };
   });
   $effect(() => {
@@ -136,6 +139,8 @@
     {/if}
   </div>
 </div>
+
+{#if scanning}<BootScan ondetected={detected} ondone={scanDone} />{/if}
 
 <dialog bind:this={newRunDialog} aria-labelledby="nr-title">
   <h3 id="nr-title">Start a new run?</h3>

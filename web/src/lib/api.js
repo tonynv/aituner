@@ -49,6 +49,32 @@ export const api = {
   recommendations: (unrestricted) => req('GET', `/api/v1/recommendations?unrestricted=${unrestricted ? 1 : 0}`),
 };
 
+// Streams hardware detection (NDJSON): onLine receives {probe}, {health}, then {state} or {error} as each arrives.
+export async function detectStream(onLine) {
+  const res = await fetch('/api/v1/detect', {
+    method: 'POST', credentials: 'same-origin', body: '{}',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/x-ndjson' },
+  });
+  if (!res.ok || !res.body) {
+    const err = new Error(res.status === 401 ? 'Session expired. Reopen aituner.' : res.statusText || 'detection failed');
+    err.status = res.status;
+    throw err;
+  }
+  const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+  let buf = '';
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += value;
+    let i;
+    while ((i = buf.indexOf('\n')) >= 0) {
+      const line = buf.slice(0, i).trim();
+      buf = buf.slice(i + 1);
+      if (line) onLine(JSON.parse(line));
+    }
+  }
+}
+
 // Server-sent job output. EventSource reconnects on its own and replays from Last-Event-ID.
 export function subscribe(onEvent) {
   const es = new EventSource('/api/v1/events');
