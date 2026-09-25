@@ -275,12 +275,24 @@ func partialMarkerSuffix(s string) int {
 	return longest
 }
 
+// Limits keep the filter's cost bounded whatever a model (or a client asking for enormous outputs) produces.
+const (
+	// maxUndecided: text that has looked like a possible tool call for this long is not one (real calls are short);
+	// it is released as ordinary text. This also bounds the JSON re-parsing done while undecided.
+	maxUndecided = 64 << 10
+	// maxToolBuffer bounds how much of one message is collected once a tool call has begun (a large file written through
+	// a tool argument fits comfortably); beyond it the text is released as-is instead of growing without limit.
+	maxToolBuffer = 8 << 20
+)
+
 // filter decides what part of streamed model text is shown and what is a tool call, holding back only text that
 // might still turn out to be one.
 type filter struct {
 	names map[string]bool
 	mode  int
-	buf   string
+	buf   string          // held text while undecided / scanning (bounded by maxUndecided)
+	tool  strings.Builder // everything since a tool call began (a Builder: appending is linear, not quadratic)
+	off   bool            // a limit was hit: stop looking for tool calls, pass everything through
 }
 
 func newFilter(names map[string]bool) *filter {
@@ -291,18 +303,46 @@ func newFilter(names map[string]bool) *filter {
 	return f
 }
 
+// cheap reports whether a new piece of text can change the verdict: it must contain a character that ends a JSON value,
+// a code fence, a tag or a line. Re-classifying on every few-byte chunk would re-parse the whole held text each time.
+func cheap(d string) bool { return strings.ContainsAny(d, "}]`>\n") }
+
+func (f *filter) startTool() {
+	f.mode = modeTool
+	f.tool.WriteString(f.buf)
+	f.buf = ""
+}
+
 // Push takes the next piece of model text and returns the text that is safe to show now.
 func (f *filter) Push(d string) string {
-	f.buf += d
+	if f.off {
+		return d
+	}
 	if f.mode == modeTool {
+		f.tool.WriteString(d)
+		if f.tool.Len() > maxToolBuffer { // runaway: give up and show what we have
+			out := f.tool.String()
+			f.tool.Reset()
+			f.off = true
+			return out
+		}
 		return ""
 	}
+	f.buf += d
 	if f.mode == modeUndecided {
+		if len(f.buf) > maxUndecided {
+			out := f.buf
+			f.buf, f.off = "", true
+			return out
+		}
+		if len(f.buf) > 48 && !cheap(d) { // nothing in this chunk can finish a call: skip the (costly) re-parse
+			return ""
+		}
 		switch classify(f.buf, f.names) {
 		case hold:
 			return ""
 		case tool:
-			f.mode = modeTool
+			f.startTool()
 			return ""
 		}
 		f.mode = modeScan
@@ -324,7 +364,7 @@ func (f *filter) Push(d string) string {
 		out.WriteString(f.buf[:i])
 		f.buf = f.buf[i:]
 		if m != "```json" {
-			f.mode = modeTool
+			f.startTool()
 			break
 		}
 		nl := strings.IndexByte(f.buf, '\n')
@@ -333,11 +373,15 @@ func (f *filter) Push(d string) string {
 		}
 		end := strings.Index(f.buf[nl+1:], "```")
 		if end < 0 {
+			if len(f.buf) > maxUndecided { // a huge fenced block is not a tool call
+				out.WriteString(f.buf)
+				f.buf, f.off = "", true
+			}
 			break // the closing fence has not arrived yet
 		}
 		block := f.buf[:nl+1+end+3]
 		if _, calls := ExtractToolCalls(block, f.names); len(calls) > 0 {
-			f.mode = modeTool
+			f.startTool()
 			break
 		}
 		out.WriteString(block)
@@ -348,12 +392,19 @@ func (f *filter) Push(d string) string {
 
 // Finish is called when the message ends: it returns any remaining text and the tool calls found.
 func (f *filter) Finish() (string, []Call) {
-	if f.buf == "" {
+	rest := f.buf
+	if f.mode == modeTool {
+		rest = f.tool.String()
+	}
+	if rest == "" {
 		return "", nil
 	}
-	prose, calls := ExtractToolCalls(f.buf, f.names)
+	if f.off {
+		return rest, nil
+	}
+	prose, calls := ExtractToolCalls(rest, f.names)
 	if len(calls) == 0 {
-		return stripSpecial(f.buf), nil
+		return stripSpecial(rest), nil
 	}
 	return prose, calls
 }

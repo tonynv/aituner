@@ -213,7 +213,8 @@ func fakeServer(t *testing.T, name string) (bin, dir string) {
 	t.Helper()
 	dir = t.TempDir()
 	bin = filepath.Join(dir, name)
-	os.WriteFile(bin, []byte("#!/bin/sh\nexec sleep 300\n"), 0o755)
+	// no exec: like the real python server, the process keeps its script name and arguments in its command line
+	os.WriteFile(bin, []byte("#!/bin/sh\nwhile true; do sleep 1; done\n"), 0o755)
 	return bin, dir
 }
 
@@ -304,5 +305,22 @@ func TestReapStaleStopsOnlyTheRecordedServer(t *testing.T) {
 	}
 	if reaped, err := ReapStale(filepath.Join(t.TempDir(), "missing")); reaped || err != nil {
 		t.Fatal("a missing pidfile is normal")
+	}
+}
+
+func TestLogFileIsNeverWrittenThroughAPlantedSymlink(t *testing.T) {
+	bin, dir := fakeServer(t, "mlx_lm.server")
+	victim := filepath.Join(t.TempDir(), "victim.txt")
+	os.WriteFile(victim, []byte("precious"), 0o600)
+	m := New()
+	m.LogFile = filepath.Join(t.TempDir(), "model-server.log")
+	os.Symlink(victim, m.LogFile)
+	if err := m.Start(context.Background(), Spec{Bin: bin, ModelDir: dir}); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(300 * time.Millisecond)
+	m.Stop()
+	if b, _ := os.ReadFile(victim); string(b) != "precious" {
+		t.Fatalf("the model server log was written through a symlink: %q", b)
 	}
 }

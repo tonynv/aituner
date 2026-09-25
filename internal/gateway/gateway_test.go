@@ -3,6 +3,7 @@ package gateway
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 // Fixtures in testdata/ are real responses captured from mlx_lm.server 0.31.3 (Llama-3.1-8B-Instruct-4bit and
@@ -731,5 +733,82 @@ func TestModelsListingReflectsTheModelStartedAfterTheGatewayWasCreated(t *testin
 	repo, window = "other/Model-8bit", 32768 // and can change again
 	if id, cw := get(); id != "other/Model-8bit" || cw != 32768 {
 		t.Fatalf("after switching models: %q %v", id, cw)
+	}
+}
+
+// Security review: the streaming filter must stay bounded and fast whatever it is fed.
+func TestFilterIsBoundedAndFastOnAdversarialStreams(t *testing.T) {
+	start := time.Now()
+	// 1) endless text that looks like the start of a JSON tool call, in tiny chunks
+	f := newFilter(weather)
+	var shown strings.Builder
+	shown.WriteString(f.Push(`{"name":"get_weather","arguments":{"a":`))
+	for i := 0; i < 200_000; i++ {
+		shown.WriteString(f.Push("x,"))
+	}
+	text, calls := f.Finish()
+	shown.WriteString(text)
+	if len(calls) != 0 || shown.Len() < 400_000 {
+		t.Fatalf("held text must be released, not lost: shown=%d calls=%d", shown.Len(), len(calls))
+	}
+	// 2) a runaway tool-call body
+	f = newFilter(weather)
+	f.Push("<tool_call>")
+	total := 0
+	for i := 0; i < 1_500_000; i++ {
+		total += len(f.Push("0123456789")) // 15 MB in 10-byte chunks
+	}
+	text, _ = f.Finish()
+	if total+len(text) < 15_000_000-len("<tool_call>") {
+		t.Fatalf("no output may be lost when the limit is hit: %d", total+len(text))
+	}
+	// 3) a huge fenced block that never closes
+	f = newFilter(weather)
+	var out strings.Builder
+	out.WriteString(f.Push("intro\n```json\n"))
+	for i := 0; i < 100_000; i++ {
+		out.WriteString(f.Push("{\"k\":1}\n"))
+	}
+	rest, _ := f.Finish()
+	if out.Len()+len(rest) < 800_000 {
+		t.Fatalf("fenced block lost: %d", out.Len()+len(rest))
+	}
+	limit := 3 * time.Second
+	if raceEnabled {
+		limit = 15 * time.Second // the race detector slows tight loops roughly tenfold
+	}
+	if d := time.Since(start); d > limit {
+		t.Fatalf("filter took %v on adversarial input: it is not bounded", d)
+	}
+}
+
+func TestChatTemplateKwargsAreRestrictedToFlatScalars(t *testing.T) {
+	cases := map[string]string{
+		`{"chat_template_kwargs":{"enable_thinking":false,"style":"terse","n":3}}`:    `{"enable_thinking":false,"n":3,"style":"terse"}`,
+		`{"chat_template_kwargs":{"nested":{"a":1},"list":[1,2],"ok":true}}`:          `{"ok":true}`,
+		`{"chat_template_kwargs":{"nested":{"a":1}}}`:                                 "",
+		`{"chat_template_kwargs":"not an object"}`:                                    "",
+		`{"chat_template_kwargs":{}}`:                                                 "",
+		`{"chat_template_kwargs":{"long":"` + strings.Repeat("a", 300) + `","ok":1}}`: `{"ok":1}`,
+	}
+	for in, want := range cases {
+		b, _, err := sanitize([]byte(in), allowedChat)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var m map[string]json.RawMessage
+		json.Unmarshal(b, &m)
+		got := string(m["chat_template_kwargs"])
+		if got != want {
+			t.Errorf("%.60s...\\n got %q\\nwant %q", in, got, want)
+		}
+	}
+	big := `{"chat_template_kwargs":{`
+	for i := 0; i < 40; i++ {
+		big += fmt.Sprintf(`"k%d":1,`, i)
+	}
+	big += `"z":1}}`
+	if b, _, _ := sanitize([]byte(big), allowedChat); strings.Contains(string(b), "chat_template_kwargs") {
+		t.Error("more than 16 keys must be dropped")
 	}
 }

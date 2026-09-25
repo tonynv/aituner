@@ -218,6 +218,7 @@ func (s *Server) handleServeStatus(w http.ResponseWriter, r *http.Request) {
 
 // handleServeKey reveals the gateway key. It is a separate, explicit request so the key never rides along in polled state.
 func (s *Server) handleServeKey(w http.ResponseWriter, r *http.Request) {
+	s.cfg.Log("audit: gateway key revealed") // a GET, so the generic audit middleware (mutations only) would miss it
 	writeJSON(w, http.StatusOK, map[string]string{"key": s.gwKey})
 }
 

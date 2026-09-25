@@ -159,6 +159,13 @@ func sanitize(raw []byte, allow map[string]bool) ([]byte, bool, error) {
 			out["max_tokens"] = v
 		}
 	}
+	if v, ok := out["chat_template_kwargs"]; ok {
+		if clean := cleanKwargs(v); clean != nil {
+			out["chat_template_kwargs"] = clean
+		} else {
+			delete(out, "chat_template_kwargs")
+		}
+	}
 	var stream bool
 	if v, ok := out["stream"]; ok {
 		_ = json.Unmarshal(v, &stream)
@@ -344,4 +351,33 @@ func (g *Gateway) countTokens(w http.ResponseWriter, r *http.Request) {
 	b, _ := json.Marshal(tr.Body)
 	w.Header().Set("x-aituner-estimate", "characters/3.5")
 	writeJSON(w, 200, map[string]any{"input_tokens": int(float64(len(b)) / 3.5)})
+}
+
+// cleanKwargs keeps chat_template_kwargs to what template switches look like in practice (for example
+// {"enable_thinking": false}): at most 16 keys, values that are booleans, numbers or short strings. Anything else is
+// dropped, so caller-controlled structure never reaches the template engine.
+func cleanKwargs(raw json.RawMessage) json.RawMessage {
+	var in map[string]any
+	if json.Unmarshal(raw, &in) != nil || len(in) == 0 || len(in) > 16 {
+		return nil
+	}
+	out := map[string]any{}
+	for k, v := range in {
+		if len(k) > 64 {
+			continue
+		}
+		switch x := v.(type) {
+		case bool, float64:
+			out[k] = x
+		case string:
+			if len(x) <= 256 {
+				out[k] = x
+			}
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	b, _ := json.Marshal(out)
+	return b
 }

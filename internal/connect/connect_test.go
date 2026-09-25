@@ -531,3 +531,34 @@ func (b brokenVim) Run(ctx context.Context, emit Emit, dir string, env []string,
 	}
 	return b.recorder.Run(ctx, emit, dir, env, name, args...)
 }
+
+func TestAtomicWritesLeaveNoTempFilesAndNeverFollowAPlantedSymlink(t *testing.T) {
+	dir := t.TempDir()
+	victim := filepath.Join(dir, "victim.txt")
+	os.WriteFile(victim, []byte("precious"), 0o600)
+	target := filepath.Join(dir, "launcher")
+	// an attacker who guesses a fixed "<path>.tmp" name and plants a symlink there must gain nothing
+	os.Symlink(victim, target+".tmp")
+	for i := 0; i < 3; i++ {
+		if _, err := writeManaged(target, "#!/bin/sh\n# "+Marker+"\necho "+fmt.Sprint(i)+"\n", 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if b, _ := os.ReadFile(victim); string(b) != "precious" {
+		t.Fatalf("a planted symlink redirected the write: %q", b)
+	}
+	ents, _ := os.ReadDir(dir)
+	for _, e := range ents {
+		if strings.HasSuffix(e.Name(), ".tmp") && e.Name() != "launcher.tmp" {
+			t.Errorf("temp file left behind: %s", e.Name())
+		}
+	}
+	if fi, _ := os.Stat(target); fi.Mode().Perm() != 0o755 {
+		t.Fatalf("mode %v", fi.Mode().Perm())
+	}
+	sec := filepath.Join(dir, "secret")
+	writeOwned(sec, "key", 0o600)
+	if fi, _ := os.Stat(sec); fi.Mode().Perm() != 0o600 {
+		t.Fatalf("secrets must be owner-only: %v", fi.Mode().Perm())
+	}
+}

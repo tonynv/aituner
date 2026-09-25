@@ -415,7 +415,7 @@ func (m *Manager) openLogFile() {
 	if m.LogFile == "" {
 		return
 	}
-	f, err := os.OpenFile(m.LogFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	f, err := os.OpenFile(m.LogFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC|syscall.O_NOFOLLOW, 0o600) // O_NOFOLLOW: never write through a planted symlink
 	if err != nil {
 		return
 	}
