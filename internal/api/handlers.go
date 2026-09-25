@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/tonynv/aituner/internal/bench"
@@ -126,24 +127,36 @@ func (s *Server) benchPlan(hw *platform.Hardware, phase string) BenchPlan {
 	return bp
 }
 
+// stateErr is a failure building the state, with the HTTP status and error kind to report.
+type stateErr struct {
+	code      int
+	kind, msg string
+}
+
 func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
+	resp, e := s.buildState(r.Context())
+	if e != nil {
+		writeErr(w, e.code, e.kind, e.msg)
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (s *Server) buildState(ctx context.Context) (StateResp, *stateErr) {
 	resp := StateResp{Platform: s.cfg.Platform.Name(), Job: s.jobs.info(),
 		Baseline: []bench.Metric{}, Tuned: []bench.Metric{}, Compare: []bench.Row{}, Skipped: map[string][]string{}, Warnings: map[string][]string{}, Changes: []store.TuneChange{}}
 	hw := s.hardware()
 	if hw == nil {
 		resp.Message = s.unsupportedMsg()
-		writeJSON(w, http.StatusOK, resp)
-		return
+		return resp, nil
 	}
-	run, err := s.tn.LatestRun(r.Context())
+	run, err := s.tn.LatestRun(ctx)
 	if err != nil {
-		writeErr(w, 500, "no_run", err.Error())
-		return
+		return resp, &stateErr{500, "no_run", err.Error()}
 	}
-	rs, err := s.tn.Results(r.Context(), run.ID)
+	rs, err := s.tn.Results(ctx, run.ID)
 	if err != nil {
-		writeErr(w, 500, "db", err.Error())
-		return
+		return resp, &stateErr{500, "db", err.Error()}
 	}
 	resp.Supported, resp.Hardware, resp.Run, resp.Phase = true, hw, &run, run.Phase
 	resp.Baseline, resp.Tuned = toMetrics(rs, "baseline"), toMetrics(rs, "tuned")
@@ -151,7 +164,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		resp.Compare = bench.Compare(resp.Baseline, resp.Tuned)
 	}
 	for _, stage := range []string{"baseline", "tuned"} {
-		if e, err := s.tn.CacheGet(r.Context(), "bench_meta", run.ID+"|"+stage); err == nil {
+		if e, err := s.tn.CacheGet(ctx, "bench_meta", run.ID+"|"+stage); err == nil {
 			var m benchMeta
 			if json.Unmarshal(e.Body, &m) == nil {
 				resp.Skipped[stage] = m.Skipped
@@ -159,7 +172,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	if cs, err := s.tn.TuneChanges(r.Context(), run.ID); err == nil {
+	if cs, err := s.tn.TuneChanges(ctx, run.ID); err == nil {
 		resp.Changes = cs
 	}
 	resp.BenchPlan = s.benchPlan(hw, run.Phase)
@@ -171,15 +184,15 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		resp.Headline["tuned"] = report.HeadlineOf(resp.Tuned)
 	}
 	if len(resp.Headline) == 0 {
-		if prev, at := s.previousMeasured(r.Context(), run.ID); prev != nil {
+		if prev, at := s.previousMeasured(ctx, run.ID); prev != nil {
 			resp.Headline, resp.HeadlineFrom = prev, at
 		}
 	}
-	resp.BudgetGB = s.budgetGB(r.Context(), run.ID, hw)
+	resp.BudgetGB = s.budgetGB(ctx, run.ID, hw)
 	if ss := s.serve.Status(); ss.State != serve.StateStopped {
 		resp.Serving = &servingBrief{State: ss.State, Repo: ss.Repo}
 	}
-	writeJSON(w, http.StatusOK, resp)
+	return resp, nil
 }
 
 // healthTTL is how long one live sample is reused: pollers see fresh numbers without each request spawning samplers.
@@ -195,20 +208,54 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s.health)
 }
 
+// handleDetect re-runs hardware detection and returns the state. With "Accept: application/x-ndjson" it streams the
+// detection instead, one JSON object per line: {"probe": ...} for each command as it finishes (the start-up scan), then
+// {"health": ...} (a live sensor sample), then {"state": ...} or {"error": ...}.
 func (s *Server) handleDetect(w http.ResponseWriter, r *http.Request) {
 	if j := s.jobs.info(); j != nil && j.Running {
 		writeErr(w, http.StatusConflict, "busy", ErrBusy.Error())
 		return
 	}
-	if err := s.refreshHW(r.Context()); err != nil {
-		writeErr(w, http.StatusNotImplemented, "platform_unsupported", s.unsupportedMsg())
+	fl, canFlush := w.(http.Flusher)
+	if r.Header.Get("Accept") != "application/x-ndjson" || !canFlush {
+		if err := s.refreshHW(r.Context()); err != nil {
+			writeErr(w, http.StatusNotImplemented, "platform_unsupported", s.unsupportedMsg())
+			return
+		}
+		if err := s.ensureRun(r.Context(), false); err != nil {
+			writeErr(w, 500, "db", err.Error())
+			return
+		}
+		s.handleState(w, r)
 		return
 	}
+	w.Header().Set("Content-Type", "application/x-ndjson")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(http.StatusOK)
+	var mu sync.Mutex
+	enc := json.NewEncoder(w)
+	send := func(v any) {
+		mu.Lock()
+		defer mu.Unlock()
+		enc.Encode(v)
+		fl.Flush()
+	}
+	ctx := platform.WithProbes(r.Context(), func(p platform.Probe) { send(map[string]any{"probe": p}) })
+	if err := s.refreshHW(ctx); err != nil {
+		send(map[string]string{"error": s.unsupportedMsg()})
+		return
+	}
+	send(map[string]any{"health": platform.CheckHealth(ctx)})
 	if err := s.ensureRun(r.Context(), false); err != nil {
-		writeErr(w, 500, "db", err.Error())
+		send(map[string]string{"error": err.Error()})
 		return
 	}
-	s.handleState(w, r)
+	resp, e := s.buildState(r.Context())
+	if e != nil {
+		send(map[string]string{"error": e.msg})
+		return
+	}
+	send(map[string]any{"state": resp})
 }
 
 func (s *Server) handleNewRun(w http.ResponseWriter, r *http.Request) {

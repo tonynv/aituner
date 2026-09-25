@@ -305,6 +305,53 @@ func TestMonitorToolRequests(t *testing.T) {
 	}
 }
 
+func TestDetectStreamsProbesThenState(t *testing.T) {
+	e := newEnv(t)
+	r, b := e.do(t, "POST", "/api/v1/detect", "{}", e.authed(map[string]string{"Accept": "application/x-ndjson"}))
+	if r.StatusCode != 200 || r.Header.Get("Content-Type") != "application/x-ndjson" {
+		t.Fatalf("%d %s", r.StatusCode, r.Header.Get("Content-Type"))
+	}
+	var probes, health, states int
+	lines := strings.Split(strings.TrimSpace(string(b)), "\n")
+	for i, l := range lines {
+		var m map[string]json.RawMessage
+		if err := json.Unmarshal([]byte(l), &m); err != nil {
+			t.Fatalf("line %d: %v", i, err)
+		}
+		switch {
+		case m["probe"] != nil:
+			var p platform.Probe
+			json.Unmarshal(m["probe"], &p)
+			if p.Cmd == "" {
+				t.Fatalf("empty probe: %s", l)
+			}
+			probes++
+		case m["health"] != nil:
+			health++
+		case m["state"] != nil:
+			var st StateResp
+			if err := json.Unmarshal(m["state"], &st); err != nil || !st.Supported || st.Hardware == nil {
+				t.Fatalf("state: %v %s", err, l)
+			}
+			states++
+			if i != len(lines)-1 {
+				t.Fatal("state is not the last line")
+			}
+		default:
+			t.Fatalf("unexpected line %s", l)
+		}
+	}
+	if probes < 5 || health != 1 || states != 1 {
+		t.Fatalf("probes=%d health=%d states=%d", probes, health, states)
+	}
+	// without the Accept header it is the plain JSON state, as before
+	r, b = e.do(t, "POST", "/api/v1/detect", "{}", e.authed(nil))
+	var st StateResp
+	if r.StatusCode != 200 || json.Unmarshal(b, &st) != nil || !st.Supported {
+		t.Fatalf("%d %s", r.StatusCode, b)
+	}
+}
+
 func TestPhaseGates(t *testing.T) {
 	e := newEnv(t)
 	for _, c := range []struct{ m, p string }{{"GET", "/api/v1/tune/plan"}, {"POST", "/api/v1/tune/apply"}} {
