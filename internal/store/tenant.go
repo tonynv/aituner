@@ -300,3 +300,42 @@ func (t *Tenant) ListRuns(ctx context.Context, limit int) ([]Run, error) {
 	}
 	return out, rows.Err()
 }
+
+// ErrChangesApplied means a tuning change is still applied: its record is what reverts it, so reports cannot be cleared.
+var ErrChangesApplied = errors.New("a tuning change is still applied; revert it first")
+
+// ClearReports deletes this tenant's runs, benchmark results, tuning history and the cached entries of the given
+// sources, in one transaction. Machines and settings stay. It refuses while any tuning change is unreverted.
+func (t *Tenant) ClearReports(ctx context.Context, cacheSources ...string) (runs int64, err error) {
+	tx, err := t.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback() //nolint:errcheck // a no-op after Commit
+	var applied int
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM tune_changes WHERE tenant_id=? AND reverted_at IS NULL`, t.id).Scan(&applied); err != nil {
+		return 0, err
+	}
+	if applied > 0 {
+		return 0, ErrChangesApplied
+	}
+	for _, q := range []string{
+		`DELETE FROM bench_results WHERE tenant_id=?`,
+		`DELETE FROM tune_changes WHERE tenant_id=?`,
+	} {
+		if _, err := tx.ExecContext(ctx, q, t.id); err != nil {
+			return 0, err
+		}
+	}
+	res, err := tx.ExecContext(ctx, `DELETE FROM runs WHERE tenant_id=?`, t.id)
+	if err != nil {
+		return 0, err
+	}
+	runs, _ = res.RowsAffected()
+	for _, src := range cacheSources {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM reco_cache WHERE tenant_id=? AND source=?`, t.id, src); err != nil {
+			return 0, err
+		}
+	}
+	return runs, tx.Commit()
+}

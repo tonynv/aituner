@@ -210,3 +210,51 @@ func TestListRunsAndGetMachineAreTenantScoped(t *testing.T) {
 		t.Fatalf("%+v %v", m, err)
 	}
 }
+
+func TestClearReportsIsTenantScopedAndGuardsAppliedChanges(t *testing.T) {
+	d := open(t)
+	ctx := context.Background()
+	a, ra := setup(t, d, "a")
+	b, rb := setup(t, d, "b")
+	for _, x := range []struct {
+		tn *Tenant
+		r  Run
+	}{{a, ra}, {b, rb}} {
+		if err := x.tn.AddResult(ctx, x.r.ID, Result{Stage: "baseline", Suite: "s", Engine: "e", Metric: "m", Value: 1, Unit: "u"}); err != nil {
+			t.Fatal(err)
+		}
+		if err := x.tn.CachePut(ctx, "modelbench", "repo", json.RawMessage(`{}`)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	id, err := a.AddTuneChange(ctx, ra.ID, "k", "0", "1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.ClearReports(ctx, "modelbench"); !errors.Is(err, ErrChangesApplied) {
+		t.Fatalf("cleared while a change is applied: %v", err)
+	}
+	if rs, _ := a.Results(ctx, ra.ID); len(rs) != 1 {
+		t.Fatal("a refused clear deleted results")
+	}
+	if err := a.MarkReverted(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	n, err := a.ClearReports(ctx, "modelbench")
+	if err != nil || n != 1 {
+		t.Fatalf("%d %v", n, err)
+	}
+	if _, err := a.LatestRun(ctx); err == nil {
+		t.Fatal("tenant a still has a run")
+	}
+	if _, err := a.CacheGet(ctx, "modelbench", "repo"); !errors.Is(err, ErrNotFound) {
+		t.Fatal("tenant a cache survived")
+	}
+	// tenant b is untouched
+	if rs, _ := b.Results(ctx, rb.ID); len(rs) != 1 {
+		t.Fatal("clearing a deleted b's results")
+	}
+	if _, err := b.CacheGet(ctx, "modelbench", "repo"); err != nil {
+		t.Fatal("clearing a deleted b's cache")
+	}
+}
