@@ -41,3 +41,10 @@ Legend: [x] done, [~] partial, [ ] not done. Build order: DataStore -> API -> UI
 - [x] Shared MLX install card on Downloads and Setup; Setup unlocks after a download
 - [x] Pinned stats fall back to the last measured run
 - [ ] Re-run QA (tonynv-qa) on the new flow, dark/light, mobile viewport
+
+## P13 Speed
+- [x] Model benchmark harness (Python workload, Go wrapper, API, Downloads table)
+- [x] Lean Claude Code launcher (16x smaller request)
+- [x] Prompt-cache bound; context reported without a benchmark
+- [ ] End-to-end timing of lean Claude Code turns per model; pick and document the recommended coding model
+- [ ] Curated low-refusal MoE candidates in the recommendations

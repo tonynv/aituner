@@ -421,3 +421,15 @@ Supersedes the earlier rule that recommendations unlock only after tune and re-r
 - Downloads are a server-side queue (`download.Manager.Enqueue`): one at a time, FIFO, a failed start is recorded and skipped, a waiting item can be removed; state `queued` with `position`. Only repos the recommender offered are accepted (403 `not_offered`).
 - UI: Hardware -> Downloads (queue panel at the top) -> Setup (unlocks after a model is downloaded). Benchmark, Tune and Re-run are an optional track that follows the server phase.
 - Pinned stats fall back to the newest earlier measured run (`headline_from`) and are labelled as such.
+
+### 16.8 Speed: what was measured and what was changed (owner request: "token performance is terrible")
+
+Measured with the model benchmark harness (`mlxbench.py modelbench`: real source code as the prompt, two trials, median; 1K/4K/16K context; fp16 and 8-bit KV cache), on the reference machine (Mac Studio M1 Max 32 GB):
+
+- **Prefill is compute-bound.** ~330 tok/s for an 8B 4-bit model at 10K tokens, identical for `--prefill-step-size` 2048, 4096 and 8192 (308-337 tok/s). It cannot be tuned away; only fewer tokens or a smaller model help.
+- **The 8-bit KV cache is slower and used more peak memory** in every cell tested (e.g. Llama-3.1-8B at 16K: decode 39.2 to 37.7 tok/s, peak 7.3 to 10.4 GB). aituner leaves KV quantisation off unless the user asks.
+- **Claude Code sends ~27,700 tokens per request** with a typical setup (45 tools = 65K chars, skills, CLAUDE.md, hooks; captured against a recording endpoint). At ~330 tok/s that is ~84 s before the first word. `claude --bare` sends ~1,700 tokens (Bash, Read, Edit; no hooks, skills, MCP, CLAUDE.md), 16x fewer. The launcher `aituner-claude` now uses `--bare` plus `--settings '{"attribution":{"commit":"","pr":""}}'` by default; `AITUNER_CLAUDE_FULL=1` restores the complete tool. Note: `--tools` does not add tools back under `--bare` (verified).
+- Prompt cache: `--prompt-cache-bytes` = RAM/8 (1-6 GiB), `--prompt-cache-size 16`.
+- Launcher scrubs inherited Claude Code session variables, and aituner strips them from every command it spawns.
+- The context reported to Claude Code no longer depends on a benchmark in the current run (Metal is probed once).
+- Ollama is optional (comparison only) and was removed from the reference machine; aituner works without it.

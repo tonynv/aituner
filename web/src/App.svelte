@@ -52,6 +52,9 @@
     try { localStorage.setItem('aituner-theme', theme); } catch { /* storage blocked */ }
   }
 
+  // a new tab opens at its top, not wherever the previous page was scrolled to
+  $effect(() => { app.tab; window.scrollTo({ top: 0 }); });
+
   const st = $derived(app.state);
   const runReady = $derived(!!app.serve && ((app.serve.models?.length ?? 0) > 0 || app.serve.server?.state !== 'stopped'));
   const serving = $derived(app.serve?.server?.state === 'running');
