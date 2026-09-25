@@ -22,6 +22,10 @@ func claudeLauncher(env Env) string {
 # Runs Claude Code against the local model served by aituner. Your normal ` + "`claude`" + ` command, its login and
 # ~/.claude/settings.json are not touched: everything here applies to this one process.
 set -euo pipefail
+# If this was started from inside another Claude Code session (aituner itself may have been), that session's markers and
+# messaging credentials would be inherited: Claude Code then disables transcript saving, and the identity would leak into this one.
+unset CLAUDECODE CLAUDE_PID CLAUDE_EFFORT CLAUDE_CODE_CHILD_SESSION CLAUDE_CODE_SESSION_ID CLAUDE_CODE_SESSION_ATTENDED \
+  CLAUDE_CODE_BRIDGE_SESSION_ID CLAUDE_CODE_MESSAGING_SOCKET CLAUDE_CODE_MESSAGING_TOKEN CLAUDE_CODE_ENTRYPOINT CLAUDE_CODE_EXECPATH
 export PATH="$PATH:/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin" # appended: never overrides the tools you already resolve
 KEY_FILE=` + shq(env.KeyFile) + `
 BASE=` + shq(env.RootURL) + `

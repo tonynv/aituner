@@ -367,11 +367,12 @@ func TestClaudeLauncherExportsTheRightEnvironment(t *testing.T) {
 	defer gw.Close()
 	env.RootURL = gw.URL
 	bin := t.TempDir()
-	os.WriteFile(filepath.Join(bin, "claude"), []byte("#!/bin/sh\nenv | grep -E '^(ANTHROPIC|CLAUDE_CODE)' | sort\necho \"ARGS:$*\"\n"), 0o755)
+	os.WriteFile(filepath.Join(bin, "claude"), []byte("#!/bin/sh\nenv | grep -E '^(ANTHROPIC|CLAUDE)' | sort\necho \"ARGS:$*\"\n"), 0o755)
 	launcher := filepath.Join(t.TempDir(), "aituner-claude")
 	os.WriteFile(launcher, []byte(claudeLauncher(env)), 0o755)
 	cmd := exec.Command("/bin/bash", launcher, "--flag", "value")
-	cmd.Env = []string{"HOME=" + env.Home, "PATH=" + bin + ":/usr/bin:/bin"} // the stand-in claude comes first; the launcher must not reorder it
+	cmd.Env = []string{"HOME=" + env.Home, "PATH=" + bin + ":/usr/bin:/bin", // the stand-in claude comes first; the launcher must not reorder it
+		"CLAUDECODE=1", "CLAUDE_CODE_CHILD_SESSION=1", "CLAUDE_CODE_SESSION_ID=abc", "CLAUDE_CODE_MESSAGING_TOKEN=secret", "CLAUDE_CODE_BRIDGE_SESSION_ID=x"}
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("%v\n%s", err, out)
@@ -381,6 +382,11 @@ func TestClaudeLauncherExportsTheRightEnvironment(t *testing.T) {
 		"CLAUDE_CODE_MAX_CONTEXT_TOKENS=65536", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1", "ARGS:--flag value"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("missing %q in:\n%s", want, s)
+		}
+	}
+	for _, leaked := range []string{"CLAUDECODE=", "CLAUDE_CODE_CHILD_SESSION", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_MESSAGING_TOKEN", "CLAUDE_CODE_BRIDGE_SESSION_ID"} {
+		if strings.Contains(s, leaked) {
+			t.Errorf("inherited session variable %s reached claude:\n%s", leaked, s)
 		}
 	}
 	// no model running: a clear message, not a broken launch
