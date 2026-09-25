@@ -14,6 +14,7 @@ import (
 	"io/fs"
 	"net/http"
 	"net/url"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
@@ -50,7 +51,8 @@ type Config struct {
 	HF       *hf.Client
 	Ollama   *bench.Ollama
 	Runner   tune.Runner
-	Connect  connect.Runner // runs installs for editor setup; nil = the real one
+	Connect  connect.Runner          // runs installs for editor setup; nil = the real one
+	Open     func(path string) error // shows a folder in Finder; nil = /usr/bin/open
 	Version  string
 	Log      func(string)
 }
@@ -95,6 +97,9 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 	}
 	if cfg.Log == nil {
 		cfg.Log = func(string) {}
+	}
+	if cfg.Open == nil {
+		cfg.Open = func(p string) error { return exec.Command("/usr/bin/open", p).Run() }
 	}
 	s := &Server{cfg: cfg, ctx: ctx, tn: cfg.Store.ForTenant(id), jobs: newJobs(), hosts: map[string]bool{}, allowed: map[string]bool{}, dl: download.New(cfg.HF), serve: serve.New(), launch: map[string]time.Time{}, launchTTL: 15 * time.Minute}
 	s.mon = monitor.New(s.ramTotal, func() bool { return s.serve.Status().State != serve.StateStopped })
@@ -257,6 +262,10 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("GET /api/v1/events", s.handleEvents)
 	api.HandleFunc("GET /api/v1/health", s.handleHealth)
 	api.HandleFunc("GET /api/v1/monitor", s.handleMonitor)
+	api.HandleFunc("GET /api/v1/storage", s.handleStorage)
+	api.HandleFunc("PUT /api/v1/storage/reports", s.handlePutReportsDir)
+	api.HandleFunc("POST /api/v1/storage/reveal", s.handleReveal)
+	api.HandleFunc("POST /api/v1/report/save", s.handleSaveReport)
 	api.HandleFunc("GET /api/v1/reset", s.handleResetPreview)
 	api.HandleFunc("POST /api/v1/reset", s.handleReset)
 	api.HandleFunc("POST /api/v1/monitor/tool", s.handleMonitorTool)

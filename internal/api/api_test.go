@@ -419,6 +419,58 @@ func TestClearModelsAndReports(t *testing.T) {
 	}
 }
 
+func TestStorageFoldersSaveAndReveal(t *testing.T) {
+	e := newEnv(t)
+	var opened []string
+	e.s.cfg.Open = func(p string) error { opened = append(opened, p); return nil }
+	st := e.json(t, "GET", "/api/v1/storage", "", 200)
+	rep := st["reports"].(map[string]any)
+	if rep["is_default"] != true || !strings.HasSuffix(rep["dir"].(string), filepath.Join("Documents", "aituner", "reports")) || st["data"].(map[string]any)["dir"] == "" {
+		t.Fatalf("%v", st)
+	}
+	home, _ := os.UserHomeDir()
+	for _, bad := range []string{"/etc", "~/Library/x", "~/.hidden", "relative/path"} {
+		if r, _ := e.do(t, "PUT", "/api/v1/storage/reports", `{"dir":"`+bad+`"}`, e.authed(nil)); r.StatusCode != 400 {
+			t.Errorf("accepted %s: %d", bad, r.StatusCode)
+		}
+	}
+	st = e.json(t, "PUT", "/api/v1/storage/reports", `{"dir":"~/Reports-x"}`, 200)
+	want, _ := filepath.EvalSymlinks(home)
+	if d := st["reports"].(map[string]any)["dir"].(string); d != filepath.Join(want, "Reports-x") {
+		t.Fatalf("saved %s", d)
+	}
+	// saving needs results; then it writes all three formats into the folder
+	if r, _ := e.do(t, "POST", "/api/v1/report/save", `{}`, e.authed(nil)); r.StatusCode != 409 {
+		t.Fatalf("saved an empty report: %d", r.StatusCode)
+	}
+	run, _ := e.s.tn.LatestRun(context.Background())
+	seed(t, e, run.ID, "baseline", 100)
+	out := e.json(t, "POST", "/api/v1/report/save", `{}`, 200)
+	files := out["files"].([]any)
+	if len(files) != 3 {
+		t.Fatalf("%v", out)
+	}
+	for _, f := range files {
+		if fi, err := os.Stat(f.(string)); err != nil || fi.Size() == 0 || filepath.Dir(f.(string)) != filepath.Join(want, "Reports-x") {
+			t.Fatalf("%v %v", f, err)
+		}
+	}
+	if r, _ := e.do(t, "POST", "/api/v1/report/save", `{"run":"../x"}`, e.authed(nil)); r.StatusCode != 400 {
+		t.Fatal("accepted a bad run id")
+	}
+	e.json(t, "POST", "/api/v1/storage/reveal", `{"which":"reports"}`, 200)
+	if len(opened) != 1 || opened[0] != filepath.Join(want, "Reports-x") {
+		t.Fatalf("opened %v", opened)
+	}
+	if r, _ := e.do(t, "POST", "/api/v1/storage/reveal", `{"which":"/etc"}`, e.authed(nil)); r.StatusCode != 400 {
+		t.Fatal("revealed an arbitrary path")
+	}
+	st = e.json(t, "PUT", "/api/v1/storage/reports", `{"dir":""}`, 200)
+	if st["reports"].(map[string]any)["is_default"] != true {
+		t.Fatal("empty did not reset to the default")
+	}
+}
+
 func TestPhaseGates(t *testing.T) {
 	e := newEnv(t)
 	for _, c := range []struct{ m, p string }{{"GET", "/api/v1/tune/plan"}, {"POST", "/api/v1/tune/apply"}} {

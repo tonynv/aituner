@@ -135,7 +135,7 @@ func writeManaged(path, content string, mode os.FileMode) (bool, error) {
 			return false, nil
 		}
 	}
-	return true, writeAtomic(path, []byte(content), mode)
+	return true, WriteAtomic(path, []byte(content), mode)
 }
 
 // writeOwned writes a file inside a directory aituner exclusively owns (no marker needed, e.g. JSON settings).
@@ -143,10 +143,11 @@ func writeOwned(path, content string, mode os.FileMode) (bool, error) {
 	if old, err := os.ReadFile(path); err == nil && string(old) == content {
 		return false, nil
 	}
-	return true, writeAtomic(path, []byte(content), mode)
+	return true, WriteAtomic(path, []byte(content), mode)
 }
 
-func writeAtomic(path string, data []byte, mode os.FileMode) error {
+// WriteAtomic writes data to path via a private temp file and a rename, creating the parent folder.
+func WriteAtomic(path string, data []byte, mode os.FileMode) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
@@ -372,7 +373,7 @@ func ensureBrew(ctx context.Context, env Env, emit Emit, formula string, cask bo
 func openTerminal(ctx context.Context, env Env, name, launcher, project string) (string, error) {
 	script := "#!/bin/bash\n# " + Marker + ": launch " + name + "\ncd " + shq(project) + " || exit 1\nexec " + shq(launcher) + "\n"
 	path := filepath.Join(env.ConfigDir, "launch", name+".command")
-	if err := writeAtomic(path, []byte(script), 0o700); err != nil {
+	if err := WriteAtomic(path, []byte(script), 0o700); err != nil {
 		return "", err
 	}
 	open, _ := env.Run.Look("open")

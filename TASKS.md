@@ -71,6 +71,18 @@ Legend: [x] done, [~] partial, [ ] not done. Build order: DataStore -> API -> UI
 - `internal/tune` TestAgentInstallRunsAtLoadAndRemoves fails on this machine with and without the P14/P15 changes
   ("the agent ran but the variables are not set"): the LaunchAgent env persistence check, not yet investigated
 
+## Queue (owner requests, 2026-09-25), in build order
+- [x] Start-up scan (live detection probes, sensors, profile)
+- [x] Report defaults to the newest measured run; clear models and reports (API)
+- [~] Storage tab: models folder (moved from Downloads), reports folder + save, app data, clear data
+- [ ] Bootstrap button in Setup: installs MLX and supported tools in the terminal-style view
+- [ ] Sidebar status: MLX and tools installed; active services green, idle grey
+- [ ] More colour, the macOS way (tinted section icons, system-blue accent), AA contrast in both themes
+- [ ] Redesign Downloads (explain the speed table, including the Claude Code turn columns)
+- [ ] Machine picture from macOS's own device icons (CoreTypes), generic server fallback
+- [ ] Official icons for the editor integrations
+- [ ] Knowledge base and Skills folders (join the Storage tab)
+
 ## Requested next (owner, 2026-09-25), not started
 - Chat with the running model from the Monitor screen (Claude-web-like)
 - Knowledge base folder (local) for RAG over the running model
