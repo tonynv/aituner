@@ -48,10 +48,12 @@ func (s *Server) startGateway() error {
 		return fmt.Errorf("the gateway port %d is in use by another program; free it or set AITUNER_GATEWAY_PORT", port)
 	}
 	g := gateway.New(s.gwKey, s.serve.Backend, s.cfg.Log)
-	st := s.serve.Status()
-	g.ModelID = st.Repo
-	if c := s.contextFor(context.Background(), st.ModelDir, st.Spec.KVBits); c != nil && c.Known {
-		g.ContextWindow = c.Tokens
+	g.Info = func() (string, int) { // evaluated per request: the model starts after the gateway is created
+		st := s.serve.Status()
+		if c := s.contextFor(context.Background(), st.ModelDir, st.Spec.KVBits); c != nil && c.Known {
+			return st.Repo, c.Tokens
+		}
+		return st.Repo, 0
 	}
 	srv := &http.Server{Handler: g.Handler(), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 5 * time.Minute}
 	s.gw, s.gwPort = srv, port

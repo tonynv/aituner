@@ -700,3 +700,36 @@ func TestSystemRoleMessagesAreMergedIntoOneLeadingSystemMessage(t *testing.T) {
 		}
 	}
 }
+
+// Found by running the generated Claude launcher: the gateway was created before any model was started and reported a
+// placeholder name and no context window for the rest of its life.
+func TestModelsListingReflectsTheModelStartedAfterTheGatewayWasCreated(t *testing.T) {
+	g, srv := newGW(t, nil)
+	g.ModelID = ""
+	repo, window := "", 0
+	g.Info = func() (string, int) { return repo, window }
+	get := func() (string, float64) {
+		_, body, _ := call(t, srv, "GET", "/v1/models", "", bearer)
+		var r struct {
+			Data []struct {
+				ID string  `json:"id"`
+				CW float64 `json:"context_window"`
+			}
+		}
+		if err := json.Unmarshal([]byte(body), &r); err != nil || len(r.Data) != 1 {
+			t.Fatalf("%v %s", err, body)
+		}
+		return r.Data[0].ID, r.Data[0].CW
+	}
+	if id, cw := get(); id != "aituner-local" || cw != 0 {
+		t.Fatalf("before any model: %q %v", id, cw)
+	}
+	repo, window = "mlx-community/Late-4bit", 131072 // the model starts later
+	if id, cw := get(); id != "mlx-community/Late-4bit" || cw != 131072 {
+		t.Fatalf("after the model started: %q %v", id, cw)
+	}
+	repo, window = "other/Model-8bit", 32768 // and can change again
+	if id, cw := get(); id != "other/Model-8bit" || cw != 32768 {
+		t.Fatalf("after switching models: %q %v", id, cw)
+	}
+}

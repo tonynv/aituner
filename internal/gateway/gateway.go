@@ -43,11 +43,14 @@ var allowedCompletions = func() map[string]bool {
 
 type Gateway struct {
 	Key           string
-	ModelID       string                // the model name shown to clients
-	ContextWindow int                   // tokens the loaded model can hold (0 = unknown); shown in /v1/models so clients can be configured truthfully
-	Backend       func() (string, bool) // internal model-server URL when it is ready
-	Client        *http.Client          // no overall timeout: generations can be long
-	Log           func(string)
+	ModelID       string // the model name shown to clients
+	ContextWindow int    // tokens the loaded model can hold (0 = unknown); shown in /v1/models so clients can be configured truthfully
+	// Info, when set, is consulted on every request so the model name and context window are always current (the model can
+	// be started, stopped or changed after the gateway was created). It takes precedence over ModelID and ContextWindow.
+	Info    func() (model string, contextWindow int)
+	Backend func() (string, bool) // internal model-server URL when it is ready
+	Client  *http.Client          // no overall timeout: generations can be long
+	Log     func(string)
 }
 
 func New(key string, backend func() (string, bool), log func(string)) *Gateway {
@@ -127,13 +130,16 @@ func (g *Gateway) models(w http.ResponseWriter, r *http.Request) {
 		oaError(w, 401, "invalid_api_key", "Invalid API key")
 		return
 	}
-	id := g.ModelID
+	id, ctxWin := g.ModelID, g.ContextWindow
+	if g.Info != nil {
+		id, ctxWin = g.Info()
+	}
 	if id == "" {
 		id = "aituner-local"
 	}
 	now := time.Now()
 	writeJSON(w, 200, map[string]any{"object": "list", "has_more": false, "first_id": id, "last_id": id, "data": []map[string]any{
-		{"id": id, "object": "model", "type": "model", "display_name": id, "context_window": g.ContextWindow, "max_context_tokens": g.ContextWindow, "created": now.Unix(), "created_at": now.UTC().Format(time.RFC3339), "owned_by": "aituner"}}})
+		{"id": id, "object": "model", "type": "model", "display_name": id, "context_window": ctxWin, "max_context_tokens": ctxWin, "created": now.Unix(), "created_at": now.UTC().Format(time.RFC3339), "owned_by": "aituner"}}})
 }
 
 // sanitize keeps only allow-listed fields and pins the model.
