@@ -106,6 +106,17 @@
       </nav>
     {/if}
     <div class="foot">
+      {#if app.services.length}
+        <ul class="services" aria-label="Tools and services">
+          {#each app.services as sv (sv.id)}
+            <li title="{sv.name}: {sv.detail}">
+              <span class="dot" class:on={sv.active} class:idle={sv.installed && !sv.active} aria-hidden="true"></span>
+              <span class="sname">{sv.name}</span>
+              <span class="sdetail">{sv.active ? 'active' : sv.installed ? 'idle' : 'off'}</span>
+            </li>
+          {/each}
+        </ul>
+      {/if}
       {#if machine}<span class="machine">{machine}</span>{/if}
       <div class="tools">
         {#if st?.phase === 'tuned_done'}<button class="btn small" onclick={() => newRunDialog.showModal()}><Icon name="refresh" size={14} /> New run</button>{/if}
@@ -172,6 +183,15 @@
   .state { display: inline-flex; color: var(--muted); }
   .foot { margin-top: auto; display: flex; flex-direction: column; gap: 10px; padding: 0 8px; }
   .machine { font-size: 12px; color: var(--muted); }
+  /* status: green = working now, grey = installed and idle, hollow = not installed; the word says the same */
+  .services { list-style: none; margin: 0; padding: 10px 0 0; border-top: 1px solid var(--border); display: grid; gap: 4px; }
+  .services li { display: grid; grid-template-columns: 10px 1fr auto; gap: 8px; align-items: center; font-size: 12px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; border: 1px solid var(--border-strong); }
+  .dot.idle { background: var(--faint); border-color: var(--faint); }
+  .dot.on { background: var(--ok); border-color: var(--ok); box-shadow: 0 0 0 0 color-mix(in srgb, var(--ok) 50%, transparent); animation: live 2s ease-out infinite; }
+  @keyframes live { 70% { box-shadow: 0 0 0 5px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+  .sname { color: var(--text); }
+  .sdetail { color: var(--muted); }
   .tools { display: flex; gap: 8px; }
   .content { min-width: 0; max-width: 1080px; width: 100%; padding: 0 28px 48px; }
   .banner { display: flex; gap: 8px; align-items: center; margin-top: 16px; padding: 12px 14px; border: 1px solid var(--bad); color: var(--bad); border-radius: var(--radius); }
@@ -194,6 +214,8 @@
     .opt { display: none; }
     .foot { margin: 0 0 0 auto; flex-direction: row; align-items: center; padding: 0; }
     .machine { display: none; }
+    .services { order: 4; flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 6px 14px; padding-top: 8px; }
+    .services li { display: flex; gap: 6px; }
     .content { padding: 0 var(--gutter) 48px; }
   }
 </style>

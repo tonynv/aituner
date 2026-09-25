@@ -26,7 +26,8 @@
           <input class="path" bind:value={draft} spellcheck="false" autocomplete="off" aria-label="{title} path" onkeydown={(e) => e.key === 'Enter' && save(draft)} />
         {:else}
           <div class="mono path-text">{folder?.dir || 'not set'}</div>
-          {#if folder?.info?.total_bytes}<div class="faint small">{fmtBytes(folder.info.free_bytes)} free on this volume{folder.is_default ? ' · default folder' : ''}</div>{/if}
+          {#if folder?.info && !folder.info.exists}<div class="faint small">Not created yet{folder.is_default ? ' · default folder' : ''}</div>
+          {:else if folder?.info?.total_bytes}<div class="faint small">{fmtBytes(folder.info.free_bytes)} free on this volume{folder.is_default ? ' · default folder' : ''}</div>{/if}
         {/if}
       </div>
     </div>
@@ -36,7 +37,7 @@
         <button class="btn small" onclick={() => save('')} disabled={saving}>Use default</button>
         <button class="btn small" onclick={() => (editing = false)} disabled={saving}>Cancel</button>
       {:else}
-        {#if onreveal}<button class="btn small" onclick={onreveal}><Icon name="external" size={14} /> Show in Finder</button>{/if}
+        {#if onreveal}<button class="btn small" onclick={onreveal} disabled={folder?.info && !folder.info.exists} title={folder?.info && !folder.info.exists ? 'Not created yet' : ''}><Icon name="external" size={14} /> Show in Finder</button>{/if}
         {#if onsave}<button class="btn small" onclick={edit} disabled={locked} title={locked ? lockedWhy : ''}>Change</button>{/if}
       {/if}
     </div>

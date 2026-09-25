@@ -9,6 +9,7 @@
   import { app, refresh } from '../lib/app.svelte.js';
   import { fmtBytes, fmtTokens } from '../lib/format.js';
   import { decodeAt, recommendedRepo } from '../lib/pick.js';
+  import BootstrapRun from '../lib/BootstrapRun.svelte';
 
   let { st } = $props();
   let sv = $state(null);
@@ -86,13 +87,31 @@
     if (!key) { try { key = (await api.serveKey()).key; } catch (e) { err = e.message; return; } }
     showKey = !showKey;
   }
+  // Bootstrap: one confirmed step that creates the folders and installs or updates MLX and macmon
+  let bsDialog;
+  let bsPlan = $state(null);
+  let bsRun = $state(null); // { fromSeq, since } while the terminal view is open
+  async function openBootstrap() {
+    err = '';
+    try { bsPlan = await api.bootstrapPlan(); bsDialog.showModal(); } catch (e) { err = e.message; }
+  }
+  async function runBootstrap() {
+    bsDialog.close();
+    const since = Date.now(), fromSeq = app.lastSeq;
+    try { await api.bootstrap(); bsRun = { since, fromSeq }; await refresh(); } catch (e) { err = e.message; }
+  }
+  async function closeBootstrap() { bsRun = null; await refresh(); await load(); }
+  const actionLabel = { install: 'install', update: 'update', create: 'create', none: 'ok', unavailable: 'unavailable' };
   const ctx = $derived(sv?.context);
   const running = $derived(state === 'running');
 </script>
 
 <div class="stack">
-  <div>
+  <div class="row between">
     <h2>Set up and run</h2>
+    <button class="btn small primary" onclick={openBootstrap} disabled={jobRunning || live} title={live ? 'Stop the model first: MLX cannot be updated while it runs' : ''}><Icon name="terminal" size={14} /> Bootstrap</button>
+  </div>
+  <div>
     <p class="muted">Start one of your downloaded models, then connect your editor: aituner installs and configures it for you. Everything stays on this Mac.</p>
   </div>
 
@@ -200,6 +219,14 @@
 
 <style>
   .between { justify-content: space-between; } .stack.tight { gap: 12px; }
+  dialog { background: var(--surface); color: var(--text); border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 20px; width: min(560px, calc(100vw - 32px)); }
+  dialog::backdrop { background: var(--overlay); }
+  dialog > p { margin: 8px 0 12px; }
+  .plan { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 10px; }
+  .plan li { display: grid; grid-template-columns: 92px 1fr; gap: 12px; align-items: start; }
+  .plan li > span:last-child { display: grid; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+  .plan .badge { justify-content: center; }
+  dialog .end { justify-content: flex-end; }
   .fields { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); }
   .fields label:first-child { grid-column: 1 / -1; } /* the model name is long: give it a full row */
   label { display: grid; gap: 6px; font-size: 13px; color: var(--muted); min-width: 0; }
@@ -214,3 +241,24 @@
   .kv dd { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; min-width: 0; }
   .kv dd :global(.cmd) { flex: 1; min-width: 200px; }
 </style>
+
+<dialog bind:this={bsDialog} aria-labelledby="bs-title">
+  <h3 id="bs-title">Bootstrap this Mac</h3>
+  <p class="muted">Sets up everything aituner needs, in one go. Nothing else is changed.</p>
+  {#if bsPlan}
+    {#if bsPlan.problem}<p class="bad small">{bsPlan.problem}</p>{/if}
+    <ul class="plan">
+      {#each bsPlan.steps as st (st.id)}
+        <li><span class="badge {st.action === 'none' ? 'ok' : st.action === 'unavailable' ? 'warn' : ''}">{actionLabel[st.action]}</span>
+          <span><strong>{st.name}</strong><span class="muted small mono">{st.detail}</span></span></li>
+      {/each}
+    </ul>
+    {#if bsPlan.steps.some((x) => x.id === 'folders')}<p class="faint small">To use other folders, change them in Storage first.</p>{/if}
+  {/if}
+  <div class="row end">
+    <button class="btn" onclick={() => bsDialog.close()}>Cancel</button>
+    <button class="btn primary" onclick={runBootstrap} disabled={!bsPlan || !!bsPlan.problem}>Run bootstrap</button>
+  </div>
+</dialog>
+
+{#if bsRun}<BootstrapRun fromSeq={bsRun.fromSeq} since={bsRun.since} onclose={closeBootstrap} />{/if}

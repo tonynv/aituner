@@ -1,6 +1,7 @@
 <script>
   import { onMount, tick } from 'svelte';
   import { detectStream } from './api.js';
+  import TermPanel from './TermPanel.svelte';
   import { fmtBytes } from './format.js';
 
   // The start-up scan: every launch re-detects the hardware, and this shows that detection as it happens. Each line is
@@ -13,9 +14,8 @@
   let finished = $state(false);
   let failed = $state(false);
   let elapsed = $state(0);
-  let log;
+  let log = $state();
   const t0 = performance.now();
-  let clock;
   const AUTO_MS = 3500;
   let auto;
 
@@ -50,13 +50,11 @@
 
   function finish() {
     finished = true;
-    clearInterval(clock);
     elapsed = performance.now() - t0;
     auto = setTimeout(done, AUTO_MS);
   }
   function done() {
     clearTimeout(auto);
-    clearInterval(clock);
     ondone();
   }
   function onkey(e) {
@@ -64,7 +62,6 @@
   }
 
   onMount(() => {
-    clock = setInterval(() => (elapsed = performance.now() - t0), 50);
     add({ kind: 'note', text: 'probing hardware, sensors and runtimes' });
     detectStream((m) => {
       if (m.probe) add({ kind: 'probe', ...m.probe });
@@ -93,21 +90,25 @@
       add({ kind: 'err', text: e.message });
       finish();
     });
-    return () => { clearInterval(clock); clearTimeout(auto); };
+    return () => clearTimeout(auto);
   });
   const probes = $derived(lines.filter((l) => l.kind === 'probe').length);
 </script>
 
 <svelte:window onkeydown={onkey} />
 
-<div class="scan" class:finished role="dialog" aria-modal="true" aria-labelledby="scan-title">
-  <div class="sweep" aria-hidden="true"></div>
-  <header>
-    <span id="scan-title">aituner <span class="dim">::</span> system scan</span>
-    <span class="dim">T+{secs(elapsed)}s</span>
-  </header>
+<TermPanel title="system scan" running={!finished} bind:log>
+  {#snippet footer()}
+    {#if finished}
+      <span class={failed ? 'bad' : ''}>{failed ? 'scan incomplete' : 'scan complete'} <span class="dim">· {probes} probes · {secs(elapsed)} s</span></span>
+      <button class="btn small primary" onclick={done}>Continue <span class="kbd">return</span></button>
+      <div class="countdown" style:animation-duration="{AUTO_MS}ms" aria-hidden="true"></div>
+    {:else}
+      <span>scanning<span class="cursor" aria-hidden="true"></span></span>
+      <button class="btn small" onclick={done}>Skip</button>
+    {/if}
+  {/snippet}
 
-  <div class="log" bind:this={log} aria-live="polite">
     {#each lines as l, i (i)}
       {#if l.kind === 'probe'}
         <div class="line">
@@ -129,59 +130,14 @@
       </div>
     {/if}
     {#if !finished}<div class="line"><span class="cursor" aria-hidden="true"></span></div>{/if}
-  </div>
-
-  <footer>
-    {#if finished}
-      <span class={failed ? 'bad' : ''}>{failed ? 'scan incomplete' : 'scan complete'} <span class="dim">· {probes} probes · {secs(elapsed)} s</span></span>
-      <button class="btn small primary" onclick={done}>Continue <span class="kbd">return</span></button>
-      <div class="countdown" style:animation-duration="{AUTO_MS}ms" aria-hidden="true"></div>
-    {:else}
-      <span>scanning<span class="cursor" aria-hidden="true"></span></span>
-      <button class="btn small" onclick={done}>Skip</button>
-    {/if}
-  </footer>
-</div>
+</TermPanel>
 
 <style>
-  :global(body:has(.scan)) { overflow: hidden; }
-  .scan { position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column; background: var(--bg); color: var(--text);
-    font-family: var(--font-mono); font-size: 13px; line-height: 1.6; padding: calc(20px + var(--safe-t)) calc(24px + var(--safe-r)) calc(16px + var(--safe-b)) calc(24px + var(--safe-l)); overflow: hidden; }
-  /* faint scanlines and one slow sweep: texture, not colour */
-  .scan::before { content: ''; position: absolute; inset: 0; pointer-events: none;
-    background: repeating-linear-gradient(to bottom, transparent 0 2px, color-mix(in srgb, var(--text) 4%, transparent) 2px 3px); }
-  .sweep { position: absolute; left: 0; right: 0; top: 0; height: 120px; pointer-events: none;
-    background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--text) 6%, transparent) 90%, color-mix(in srgb, var(--text) 18%, transparent));
-    animation: sweep 2.4s linear infinite; }
-  .finished .sweep { display: none; }
-  @keyframes sweep { from { transform: translateY(-120px); } to { transform: translateY(100vh); } }
-  header, footer { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-  header { padding-bottom: 12px; border-bottom: 1px solid var(--border); text-transform: uppercase; letter-spacing: 0.08em; font-size: 12px; }
-  footer { padding-top: 12px; border-top: 1px solid var(--border); flex-wrap: wrap; }
-  .log { position: relative; flex: 1; overflow-y: auto; padding: 14px 0; scrollbar-width: none; }
-  .log::-webkit-scrollbar { display: none; }
-  .line { display: grid; grid-template-columns: 76px minmax(0, 1fr) auto 36px; gap: 12px; align-items: baseline; }
-  .line.note { grid-template-columns: 76px minmax(0, 1fr); }
-  .cmd { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .res { white-space: nowrap; text-align: right; }
-  .dim { color: var(--muted); }
-  .ok { color: var(--ok); } .bad { color: var(--bad); }
-  .type { animation: type 0.22s steps(18, end) both; }
-  @keyframes type { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
   .profile { margin-top: 14px; }
   .rule { white-space: nowrap; overflow: hidden; }
   .kv { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 12px; animation: type 0.3s steps(20, end) both; }
   .k { text-transform: uppercase; letter-spacing: 0.06em; font-size: 12px; }
-  .cursor { display: inline-block; width: 8px; height: 14px; margin-left: 4px; vertical-align: -2px; background: var(--text); animation: blink 1s steps(1) infinite; }
-  @keyframes blink { 50% { opacity: 0; } }
-  .kbd { margin-left: 6px; padding: 0 4px; border: 1px solid currentColor; border-radius: 2px; font-size: 10px; opacity: 0.7; text-transform: uppercase; }
   .countdown { position: absolute; left: 0; top: -1px; height: 1px; width: 100%; background: var(--text); transform-origin: left; animation: countdown linear both; }
   @keyframes countdown { from { transform: scaleX(1); } to { transform: scaleX(0); } }
-  @media (max-width: 560px) {
-    .line { grid-template-columns: minmax(0, 1fr) 36px; }
-    .line .t, .line .res { display: none; }
-    .line.note { grid-template-columns: minmax(0, 1fr); }
-    .kv { grid-template-columns: 72px minmax(0, 1fr); }
-  }
-  @media (prefers-reduced-motion: reduce) { .sweep { display: none; } }
+  @media (max-width: 560px) { .kv { grid-template-columns: 72px minmax(0, 1fr); } }
 </style>

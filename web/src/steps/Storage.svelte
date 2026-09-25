@@ -44,7 +44,7 @@
 <div class="stack">
   <div>
     <h2>Storage</h2>
-    <p class="muted">Everything aituner keeps on this Mac. Change where models and reports go, open any folder in Finder, or clear what aituner created.</p>
+    <p class="muted">Everything aituner keeps on this Mac. Change where models, reports and the knowledge base live, open any folder in Finder, or clear what aituner created. Missing folders are created by Bootstrap in Setup, after you confirm.</p>
   </div>
 
   {#if err}<p class="bad" role="alert"><Icon name="alert" size={16} /> {err}</p>{/if}
@@ -54,7 +54,9 @@
     <FolderSetting title="Models" about="Downloaded models. Only folders aituner downloaded are listed or deleted here." folder={st.models}
       onsave={async (v) => { await api.setModelsDir(v); await load(); }} onreveal={reveal('models')} />
     <FolderSetting title="Reports" about="Saved benchmark reports (Markdown, CSV and JSON), written by Save to folder on the Report page." folder={st.reports}
-      onsave={async (v) => { st = await api.setReportsDir(v); }} onreveal={reveal('reports')} />
+      onsave={async (v) => { st = await api.setFolder('reports', v); }} onreveal={reveal('reports')} />
+    <FolderSetting title="Knowledge base" about="Documents for retrieval (RAG) with your running model. Kept here for the knowledge base feature, which is next to be built." folder={st.knowledge}
+      onsave={async (v) => { st = await api.setFolder('knowledge', v); }} onreveal={reveal('knowledge')} />
     <section class="card folder" aria-label="App data">
       <div class="row between">
         <div class="row where">

@@ -4,6 +4,7 @@ import { api, subscribe } from './api.js';
 export const app = $state({
   state: null,
   serve: null, // model-server status, polled with the state so every tab can show it
+  services: [], // tools and services for the sidebar: installed, active
   error: null, // connection / fatal
   tab: 'hardware', // what is on screen; every launch starts at the hardware home page
   detected: false, // this page load has run detection (the server re-detects on request)
@@ -30,6 +31,7 @@ export async function refresh() {
     app.state = await api.state();
     app.error = null;
     api.serve().then((v) => (app.serve = v)).catch(() => {});
+    api.services().then((v) => (app.services = v.services)).catch(() => {});
   } catch (e) {
     app.error = e.status === 401 ? 'Session expired. Reopen aituner from its terminal window (press o).' : 'Cannot reach aituner. Is it still running?';
   }
