@@ -4,8 +4,11 @@ package platform
 
 import (
 	"context"
+	"encoding/json"
 	"os"
+	"strings"
 	"testing"
+	"time"
 )
 
 // The fixture is a real system_profiler capture from a Mac Studio (M1 Max) with identifiers removed.
@@ -65,5 +68,34 @@ func TestCheckHealthLive(t *testing.T) {
 	h := CheckHealth(context.Background())
 	if h.Cores <= 0 || h.FreeMemPct < 0 || h.GPUBusyPct < 0 || h.SpeedLimitPct <= 0 {
 		t.Fatalf("%+v", h)
+	}
+}
+
+// Live: a full detection under WithProbes reports its commands, and none of what it reports carries this Mac's serial
+// number or hardware UUID (system_profiler prints both).
+func TestDetectProbesNeverLeakIdentifiers(t *testing.T) {
+	var sb strings.Builder
+	n := 0
+	ctx := WithProbes(context.Background(), func(p Probe) { n++; b, _ := json.Marshal(p); sb.Write(b) })
+	if _, err := Current().Detect(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if n < 5 || !strings.Contains(sb.String(), "system_profiler") {
+		t.Fatalf("%d probes: %s", n, sb.String())
+	}
+	raw, err := Run(context.Background(), 30*time.Second, "/usr/sbin/system_profiler", "-json", "SPHardwareDataType")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		SP []map[string]any `json:"SPHardwareDataType"`
+	}
+	if err := json.Unmarshal([]byte(raw), &doc); err != nil || len(doc.SP) == 0 {
+		t.Fatal(err)
+	}
+	for _, k := range []string{"serial_number", "platform_UUID", "provisioning_UDID"} {
+		if v, _ := doc.SP[0][k].(string); v != "" && strings.Contains(sb.String(), v) {
+			t.Fatalf("probe output contains %s", k)
+		}
 	}
 }

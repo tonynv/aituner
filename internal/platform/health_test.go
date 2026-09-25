@@ -1,9 +1,11 @@
 package platform
 
 import (
+	"context"
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 // realTherm is captured from the reference machine (`pmset -g therm`).
@@ -67,5 +69,32 @@ func TestParseGPUBusyRealCapture(t *testing.T) {
 	}
 	if _, ok := ParseGPUBusy(`"Device Utilization %"=250`); ok {
 		t.Fatal("accepted an out-of-range percentage")
+	}
+}
+
+func TestProbesReportCommandsWithoutOutputUnlessAllowed(t *testing.T) {
+	var got []Probe
+	ctx := WithProbes(context.Background(), func(p Probe) { got = append(got, p) })
+	if _, err := Run(ctx, 5*time.Second, "/bin/echo", "serial-ABC123", strings.Repeat("x", 80)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Run(ctx, 5*time.Second, "/usr/sbin/sysctl", "-n", "hw.ncpu"); err != nil {
+		t.Fatal(err)
+	}
+	Run(ctx, 5*time.Second, "/usr/bin/false")
+	if len(got) != 3 {
+		t.Fatalf("%+v", got)
+	}
+	if got[0].Out != "" || got[0].Bytes == 0 || !got[0].OK || !strings.HasPrefix(got[0].Cmd, "echo serial-ABC123 xxx") || !strings.HasSuffix(got[0].Cmd, "…") {
+		t.Fatalf("echo probe leaked output or rendered badly: %+v", got[0])
+	}
+	if got[1].Out == "" || got[1].Cmd != "sysctl -n hw.ncpu" {
+		t.Fatalf("sysctl probe: %+v", got[1])
+	}
+	if got[2].OK {
+		t.Fatal("a failing command reported OK")
+	}
+	if _, err := Run(context.Background(), time.Second, "/usr/bin/true"); err != nil {
+		t.Fatal("Run without a watcher", err)
 	}
 }
