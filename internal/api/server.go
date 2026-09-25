@@ -264,6 +264,7 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("GET /api/v1/monitor", s.handleMonitor)
 	api.HandleFunc("GET /api/v1/services", s.handleServices)
 	api.HandleFunc("GET /api/v1/machine/image", s.handleMachineImage)
+	api.HandleFunc("GET /api/v1/appicon/{id}", s.handleAppIcon)
 	api.HandleFunc("GET /api/v1/bootstrap", s.handleBootstrapPlan)
 	api.HandleFunc("POST /api/v1/bootstrap", s.handleBootstrap)
 	api.HandleFunc("GET /api/v1/storage", s.handleStorage)

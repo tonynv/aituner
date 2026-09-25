@@ -539,6 +539,27 @@ func TestMachineImageIsThisMacsOwnPicture(t *testing.T) {
 	}
 }
 
+func TestAppIconsComeFromInstalledApps(t *testing.T) {
+	e := newEnv(t)
+	for id, bundle := range appIcons {
+		r, b := e.do(t, "GET", "/api/v1/appicon/"+id, "", e.authed(nil))
+		if _, err := os.Stat(filepath.Join("/Applications", bundle)); err != nil {
+			if r.StatusCode != 404 {
+				t.Errorf("%s not installed, want 404: %d", id, r.StatusCode)
+			}
+			continue
+		}
+		if r.StatusCode != 200 || string(b[1:4]) != "PNG" {
+			t.Errorf("%s: %d %s", id, r.StatusCode, r.Header.Get("Content-Type"))
+		}
+	}
+	for _, bad := range []string{"../etc", "terminal", "%2e%2e"} { // unknown ids 404; ".." is cleaned away (redirect)
+		if r, _ := e.do(t, "GET", "/api/v1/appicon/"+bad, "", e.authed(nil)); r.StatusCode == 200 {
+			t.Errorf("%s served an icon", bad)
+		}
+	}
+}
+
 func TestPhaseGates(t *testing.T) {
 	e := newEnv(t)
 	for _, c := range []struct{ m, p string }{{"GET", "/api/v1/tune/plan"}, {"POST", "/api/v1/tune/apply"}} {

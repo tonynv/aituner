@@ -1,5 +1,6 @@
 <script>
   import Icon from './Icon.svelte';
+  import BrandIcon from './BrandIcon.svelte';
   import PlanDialog from './PlanDialog.svelte';
   import Copyable from './Copyable.svelte';
   import { api } from './api.js';
@@ -12,7 +13,6 @@
   const p = $derived(item.plan);
   const st = $derived(item.status);
   const isGeneric = $derived(item.id === 'openai');
-  const icon = $derived({ claude: 'terminal', vscode: 'code', neovim: 'terminal', 'vim-tmux': 'terminal', openai: 'server' }[item.id] || 'terminal');
 
   async function setup() {
     err = ''; busy = true; dlg.close();
@@ -30,7 +30,7 @@
 
 <section class="card ic" aria-label={p.title}>
   <div class="row between">
-    <div class="row"><Icon name={icon} /><h3>{p.title}</h3></div>
+    <div class="row"><BrandIcon id={item.id} /><h3>{p.title}</h3></div>
     <div class="row badges">
       {#if !isGeneric}<span class="badge {st.installed ? 'ok' : ''}">{st.installed ? 'installed' : 'not installed'}</span>{/if}
       <span class="badge {st.configured ? 'ok' : ''}">{st.configured ? 'configured for the local model' : 'not configured'}</span>
