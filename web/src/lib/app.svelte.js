@@ -5,6 +5,7 @@ export const app = $state({
   state: null,
   error: null, // connection / fatal
   view: null, // user-selected step; null = follow the server's step
+  report: false, // showing the Report view instead of a step
   log: [],
   lastSeq: 0,
   busy: false,

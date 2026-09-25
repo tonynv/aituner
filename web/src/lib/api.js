@@ -24,6 +24,9 @@ export const api = {
   tunePlan: () => req('GET', '/api/v1/tune/plan'),
   tuneApply: (keys) => req('POST', '/api/v1/tune/apply', { keys }),
   tuneRevert: () => req('POST', '/api/v1/tune/revert', {}),
+  runs: () => req('GET', '/api/v1/runs'),
+  report: (run) => req('GET', `/api/v1/report${run ? `?run=${encodeURIComponent(run)}` : ''}`),
+  compare: (a, b) => req('GET', `/api/v1/compare?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`),
   settings: () => req('GET', '/api/v1/settings'),
   setModelsDir: (dir) => req('PUT', '/api/v1/settings', { models_dir: dir }),
   downloads: () => req('GET', '/api/v1/downloads'),
@@ -38,3 +41,6 @@ export function subscribe(onEvent) {
   es.onmessage = (m) => { try { onEvent(JSON.parse(m.data)); } catch { /* ignore malformed */ } };
   return () => es.close();
 }
+
+// Download links are plain same-origin GETs (the session cookie authenticates them).
+export const reportUrl = (run, format) => `/api/v1/report?${run ? `run=${encodeURIComponent(run)}&` : ''}format=${format}&download=1`;

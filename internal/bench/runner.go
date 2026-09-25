@@ -117,7 +117,7 @@ func Run(ctx context.Context, o Options, emit Emit) (Result, error) {
 	}
 	for _, m := range res.Metrics {
 		if u := UnstablePct(m.Trials); u > UnstableThresholdPct && !isInfo(m) && !m.IsSeries() {
-			w := fmt.Sprintf("%s varied by ±%.0f%% between trials (something else may have used the machine); the median is reported, but treat this number with care.", m.Key(), u)
+			w := fmt.Sprintf("%s varied by ±%.0f%% between trials (something else may have used the machine); the median is reported, but treat this number with care.", m.Label, u)
 			res.Warnings = append(res.Warnings, w)
 			emit(Event{Level: "warn", Message: w})
 		}

@@ -6,6 +6,8 @@
   import Tune from './steps/Tune.svelte';
   import Rerun from './steps/Rerun.svelte';
   import Models from './steps/Models.svelte';
+  import Report from './steps/Report.svelte';
+  import PinnedStats from './lib/PinnedStats.svelte';
   import { app, start, currentStep, activeStep, maxStep, act } from './lib/app.svelte.js';
   import { api } from './lib/api.js';
 
@@ -64,6 +66,10 @@
     <div class="banner" role="alert"><Icon name="alert" size={16} /> {app.error}</div>
   {/if}
 
+  {#if st && st.supported}
+    <PinnedStats {st} onreport={() => (app.report = !app.report)} />
+  {/if}
+
   {#if st && !st.supported}
     <main><div class="card stack"><h2>Not supported yet</h2><p class="muted">{st.message}</p></div></main>
   {:else if st}
@@ -71,7 +77,7 @@
       <ol>
         {#each STEPS as s}
           <li>
-            <button class="step" class:current={active === s.n} class:done={s.n < cur || (s.n <= max && s.n !== active && s.n < 5)} disabled={s.n > max} onclick={() => (app.view = s.n === cur ? null : s.n)} aria-current={active === s.n ? 'step' : undefined}>
+            <button class="step" class:current={!app.report && active === s.n} class:done={s.n < cur || (s.n <= max && s.n !== active && s.n < 5)} disabled={s.n > max} onclick={() => { app.report = false; app.view = s.n === cur ? null : s.n; }} aria-current={active === s.n ? 'step' : undefined}>
               <span class="num">{#if s.n < cur || (s.n <= max && s.n < 5)}<Icon name="check" size={14} />{:else if s.n > max}<Icon name="lock" size={12} />{:else}{s.n}{/if}</span>
               <span class="lbl">{s.label}</span>
             </button>
@@ -80,7 +86,8 @@
       </ol>
     </nav>
     <main>
-      {#if active === 1}<Hardware hw={st.hardware} plan={st.bench_plan} phase={st.phase} />
+      {#if app.report}<Report />
+      {:else if active === 1}<Hardware hw={st.hardware} plan={st.bench_plan} phase={st.phase} />
       {:else if active === 2}<Benchmark {st} />
       {:else if active === 3}<Tune {st} />
       {:else if active === 4}<Rerun {st} onnext={() => (app.view = 5)} />

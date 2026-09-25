@@ -44,6 +44,15 @@ def probe(_):
     )
 
 
+def _warm(fn, seconds):
+    """Run fn until `seconds` have passed: GPU clocks, allocator and page residency need time, not a fixed iteration count."""
+    import mlx.core as mx
+
+    end = time.perf_counter() + seconds
+    while time.perf_counter() < end:
+        mx.eval(fn())
+
+
 def _timed(fn, iters):
     import mlx.core as mx
 
@@ -58,11 +67,27 @@ def gpu(args):
 
     mx.random.seed(0)
     n = args.matmul_n
+    # memory bandwidth FIRST, in a clean allocator state: buffers left over from the matmul tests fragment MLX's cache and
+    # made this number swing by 5-30% (measured); in a clean process it is stable to about 1%.
+    # Reads N bytes and writes N bytes per elementwise op.
+    elems = args.bw_mib * 1024 * 1024 // 4
+    x = mx.ones((elems,), dtype=mx.float32)
+    mx.eval(x)
+    _warm(lambda: x + 1.0, 1.5)
+    trials = []
+    for i in range(args.trials):
+        iters = 10
+        dt = _timed(lambda: x + 1.0, iters)
+        trials.append(2 * elems * 4 * iters / dt / 1e9)
+        emit(event="trial", suite="gpu", metric="mem_bandwidth", value=trials[-1], unit="GB/s", i=i + 1)
+    emit(event="result", suite="gpu", engine="mlx", metric="mem_bandwidth", unit="GB/s", trials=trials)
+    del x
+
     for dtype, name in ((mx.float16, "fp16"), (mx.float32, "fp32")):
         a = mx.random.normal((n, n)).astype(dtype)
         b = mx.random.normal((n, n)).astype(dtype)
         mx.eval(a, b)
-        _timed(lambda: a @ b, 3)  # warmup
+        _warm(lambda: a @ b, 1.0)
         trials = []
         for i in range(args.trials):
             iters = 20
@@ -72,8 +97,10 @@ def gpu(args):
         emit(event="result", suite="gpu", engine="mlx", metric=f"matmul_{name}", unit="TFLOPS", trials=trials)
         del a, b
 
-    # sustained run: continuous fp16 matmul, one throughput sample per second. A machine that throttles shows a falling
-    # series; the report derives the drop from the first vs last third.
+
+    # sustained run LAST (it heats the GPU, so it must not precede any other measurement): continuous fp16 matmul, one
+    # throughput sample per second. A machine that throttles shows a falling series; the report derives the drop from
+    # the first vs last third.
     a = mx.random.normal((n, n)).astype(mx.float16)
     b = mx.random.normal((n, n)).astype(mx.float16)
     mx.eval(a, b)
@@ -87,19 +114,6 @@ def gpu(args):
         emit(event="trial", suite="gpu", metric="sustained_matmul_fp16", value=series[-1], unit="TFLOPS", i=sec + 1)
     emit(event="result", suite="gpu", engine="mlx", metric="sustained_matmul_fp16", unit="TFLOPS", trials=series)
     del a, b
-
-    # memory-bound elementwise op: reads N bytes and writes N bytes
-    elems = args.bw_mib * 1024 * 1024 // 4
-    x = mx.ones((elems,), dtype=mx.float32)
-    mx.eval(x)
-    _timed(lambda: x + 1.0, 3)
-    trials = []
-    for i in range(args.trials):
-        iters = 10
-        dt = _timed(lambda: x + 1.0, iters)
-        trials.append(2 * elems * 4 * iters / dt / 1e9)
-        emit(event="trial", suite="gpu", metric="mem_bandwidth", value=trials[-1], unit="GB/s", i=i + 1)
-    emit(event="result", suite="gpu", engine="mlx", metric="mem_bandwidth", unit="GB/s", trials=trials)
 
 
 def fetch(args):
