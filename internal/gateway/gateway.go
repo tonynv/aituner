@@ -276,11 +276,15 @@ func (g *Gateway) messages(w http.ResponseWriter, r *http.Request) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
-		kind := "api_error"
-		if resp.StatusCode >= 400 && resp.StatusCode < 500 {
+		kind, status := "api_error", resp.StatusCode
+		if status == http.StatusNotFound {
+			// mlx_lm.server answers 404 for any failure while generating (a chat template that rejects the conversation, for
+			// example). Passed on as is, Claude Code would report "unrecognized model" and hide the real reason.
+			status = http.StatusInternalServerError
+		} else if status >= 400 && status < 500 {
 			kind = "invalid_request_error"
 		}
-		anError(w, resp.StatusCode, kind, upstreamMessage(b))
+		anError(w, status, kind, upstreamMessage(b))
 		return
 	}
 	w.Header().Set("request-id", newID("req_"))

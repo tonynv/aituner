@@ -167,6 +167,7 @@ func toOpenAI(raw []byte) (map[string]any, string, bool, ToolSet, error) {
 			return nil, "", false, nil, fmt.Errorf("messages[%d]: unsupported role %q", i, m.Role)
 		}
 	}
+	msgs = serialiseToolCalls(msgs)
 	if len(msgs) == 0 { // a system prompt alone is not a conversation
 		return nil, "", false, nil, fmt.Errorf("messages must contain at least one user or assistant message")
 	}
@@ -507,4 +508,42 @@ func StreamToAnthropic(w io.Writer, flusher http.Flusher, upstream io.Reader, mo
 // AnthropicError is the error envelope Anthropic clients expect.
 func AnthropicError(kind, msg string) map[string]any {
 	return map[string]any{"type": "error", "error": map[string]any{"type": kind, "message": msg}}
+}
+
+// serialiseToolCalls rewrites an assistant turn that made several tool calls at once into one call per assistant
+// message, each followed by its own result. Some chat templates (Llama 3.1) refuse more than one call per message and
+// the server then fails the request; the serial form means the same thing and every template accepts it.
+func serialiseToolCalls(msgs []map[string]any) []map[string]any {
+	out := make([]map[string]any, 0, len(msgs))
+	for i := 0; i < len(msgs); i++ {
+		m := msgs[i]
+		calls, _ := m["tool_calls"].([]map[string]any)
+		if m["role"] != "assistant" || len(calls) < 2 {
+			out = append(out, m)
+			continue
+		}
+		j := i + 1
+		results := map[any]map[string]any{}
+		for ; j < len(msgs) && msgs[j]["role"] == "tool"; j++ {
+			results[msgs[j]["tool_call_id"]] = msgs[j]
+		}
+		for k, c := range calls {
+			content := ""
+			if k == 0 {
+				content, _ = m["content"].(string)
+			}
+			out = append(out, map[string]any{"role": "assistant", "content": content, "tool_calls": []map[string]any{c}})
+			if r, ok := results[c["id"]]; ok {
+				out = append(out, r)
+				delete(results, c["id"])
+			}
+		}
+		for _, r := range msgs[i+1 : j] { // results that matched no call keep their place after the group
+			if _, left := results[r["tool_call_id"]]; left {
+				out = append(out, r)
+			}
+		}
+		i = j - 1
+	}
+	return out
 }

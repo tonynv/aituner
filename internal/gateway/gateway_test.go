@@ -864,3 +864,34 @@ func TestRepairFitsArgumentsToTheSchema(t *testing.T) {
 		t.Fatalf("%s", got)
 	}
 }
+
+func TestSeveralToolCallsInOneTurnAreSentOnePerMessage(t *testing.T) {
+	body := `{"model":"m","max_tokens":10,"tools":[{"name":"Bash","input_schema":{"type":"object"}}],"messages":[
+	 {"role":"user","content":"go"},
+	 {"role":"assistant","content":[{"type":"text","text":"on it"},{"type":"tool_use","id":"a","name":"Bash","input":{"command":"ls"}},{"type":"tool_use","id":"b","name":"Bash","input":{"command":"pwd"}}]},
+	 {"role":"user","content":[{"type":"tool_result","tool_use_id":"b","content":"/tmp"},{"type":"tool_result","tool_use_id":"a","content":"x"}]}]}`
+	tr, err := ToOpenAI([]byte(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	msgs := tr.Body["messages"].([]map[string]any)
+	var seq []string
+	for _, m := range msgs {
+		id := ""
+		if c, ok := m["tool_calls"].([]map[string]any); ok {
+			if len(c) != 1 {
+				t.Fatalf("assistant message with %d calls", len(c))
+			}
+			id = c[0]["id"].(string)
+		} else if v, ok := m["tool_call_id"].(string); ok {
+			id = v
+		}
+		seq = append(seq, m["role"].(string)+":"+id)
+	}
+	if got := strings.Join(seq, " "); got != "user: assistant:a tool:a assistant:b tool:b" {
+		t.Fatalf("order: %s", got)
+	}
+	if msgs[1]["content"] != "on it" || msgs[3]["content"] != "" {
+		t.Fatalf("text belongs to the first call only: %v / %v", msgs[1]["content"], msgs[3]["content"])
+	}
+}
