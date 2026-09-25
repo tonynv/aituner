@@ -56,11 +56,11 @@ reference machine the Ollama change measured about 9% slower and the tool said s
 The model runs in `mlx_lm.server` on an internal port. Editors talk to aituner's **gateway** (`127.0.0.1:8747`), which needs an API
 key, only forwards a safe set of request fields (so a client can never make the server load another model), and speaks both the
 OpenAI API and Anthropic's Messages API (which Claude Code needs). Note that Anthropic does not support routing Claude Code to
-non-Claude models: it works, but small local models are slow on its large prompts and unreliable at tool use.
+non-Claude models. The gateway makes it work: it understands the tool-call formats of Llama, Qwen (JSON and Qwen3-Coder XML) and gpt-oss (harmony), and repairs tool arguments against the tool schemas.
 
 | Tool | What "Set up" does |
 |---|---|
-| Claude Code | `aituner-claude` launcher (env vars for one run; `~/.claude` untouched); installs via `brew install --cask claude-code` if missing |
+| Claude Code | `aituner-claude` launcher (env vars for one run; `~/.claude` untouched); installs via `brew install --cask claude-code` if missing. Runs lean (`--bare`: ~1.7K-token requests instead of ~27K, so the first reply takes seconds, not minutes); `AITUNER_CLAUDE_FULL=1` for the full tool |
 | VS Code | isolated profile with Continue and the Claude Code extension; launcher `aituner-code` |
 | Neovim | `NVIM_APPNAME=aituner-nvim` profile with lazy.nvim + CodeCompanion; launcher `aituner-nvim` |
 | Vim + tmux | Homebrew Vim (system Vim has no Python) + vim-ai, tmux layout with a chat pane and the model log; sources your `~/.vimrc` read-only |

@@ -35,8 +35,13 @@
   // Wait before the first word of a cold Claude Code request: ~1.8K tokens through aituner-claude (lean), ~27.7K unmodified.
   // Uses the measured prefill speed of this model when the model benchmark has run; otherwise scales the 3B benchmark model.
   const LEAN = 1800, FULL = 27700;
-  let bench = $state(null);
-  $effect(() => { api.modelBench().then((r) => (bench = r.items.find((i) => i.repo === repo)?.result ?? null)).catch(() => {}); });
+  let benchAll = $state([]);
+  $effect(() => { api.modelBench().then((r) => (benchAll = r.items)).catch(() => {}); });
+  const bench = $derived(benchAll.find((i) => i.repo === repo)?.result ?? null);
+  const speedOf = (r) => r?.runs?.find((c) => c.kv_bits === 0 && c.prompt_tokens === 4096)?.decode_tps ?? 0;
+  const speeds = $derived(Object.fromEntries(benchAll.map((i) => [i.repo, speedOf(i.result)])));
+  let touched = false; // the user picked a model themselves: stop choosing for them
+  const fastest = $derived(Object.entries(speeds).sort((a, b) => b[1] - a[1])[0]);
   const turn = $derived.by(() => {
     const at = (n) => bench?.runs?.find((c) => c.kv_bits === 0 && c.prompt_tokens === n)?.prefill_tps;
     if (at(1024) && at(16384)) return { lean: LEAN / at(1024), full: FULL / at(16384), measured: true };
@@ -46,11 +51,12 @@
   });
   const fmtSecs = (v) => (v < 10 ? `${v.toFixed(1)} s` : v < 120 ? `${Math.round(v)} s` : `${(v / 60).toFixed(1)} min`);
 
+  $effect(() => { if (!touched && fastest && fastest[1] > 0 && !live && models.some((m) => m.repo === fastest[0])) repo = fastest[0]; });
   async function load() {
     try {
       sv = await api.serve();
       cn = await api.connect();
-      if (!repo && sv.models.length) repo = (sv.models.find((m) => m.running) ?? sv.models[0]).repo;
+      if (!repo && sv.models.length) repo = (sv.models.find((m) => m.running) ?? sv.models.find((m) => m.repo === fastest?.[0]) ?? sv.models[0]).repo;
       if (!project && cn.project_default) project = cn.project_default;
     } catch (e) { err = e.message; }
   }
@@ -103,7 +109,7 @@
     {:else}
       <div class="fields">
         <label>Model
-          <select bind:value={repo} disabled={live}>{#each models as m}<option value={m.repo}>{m.repo} ({m.size_gb.toFixed(1)} GB)</option>{/each}</select>
+          <select bind:value={repo} disabled={live} onchange={() => (touched = true)}>{#each models as m}<option value={m.repo}>{m.repo} ({m.size_gb.toFixed(1)} GB{speeds[m.repo] ? `, ${Math.round(speeds[m.repo])} tok/s measured` : ''}{fastest && fastest[1] > 0 && fastest[0] === m.repo ? ', fastest' : ''})</option>{/each}</select>
         </label>
         <label>Reply length limit
           <select bind:value={maxTokens} disabled={live}>{#each [1024, 2048, 4096, 8192, 16384] as n}<option value={n}>{n.toLocaleString()} tokens</option>{/each}</select>
