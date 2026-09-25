@@ -44,6 +44,8 @@ export const api = {
   downloads: () => req('GET', '/api/v1/downloads'),
   startDownload: (repo) => req('POST', '/api/v1/downloads', { repo }),
   cancelDownload: (repo) => req('POST', '/api/v1/downloads/cancel', { repo }),
+  monitor: (since, tools) => req('GET', `/api/v1/monitor?since=${since}${tools ? '&tools=1' : ''}`),
+  monitorTool: (id, action) => req('POST', '/api/v1/monitor/tool', { id, action, confirm: action === 'install' }),
   recommendations: (unrestricted) => req('GET', `/api/v1/recommendations?unrestricted=${unrestricted ? 1 : 0}`),
 };
 

@@ -74,9 +74,12 @@
     return () => { stop = true; clearTimeout(t); };
   });
 
+  // a model started from here opens the Monitor as soon as it is serving
+  let openMonitor = $state(false);
+  $effect(() => { if (openMonitor && (state === 'running' || state === 'error')) { openMonitor = false; if (state === 'running') app.tab = 'monitor'; } });
   async function start() {
     err = ''; busy = true; lines = []; after = 0;
-    try { await api.serveStart(repo, maxTokens, kvBits); await load(); } catch (e) { err = e.message; } finally { busy = false; }
+    try { await api.serveStart(repo, maxTokens, kvBits); openMonitor = true; await load(); } catch (e) { err = e.message; } finally { busy = false; }
   }
   async function stop() { err = ''; busy = true; try { await api.serveStop(); await load(); } catch (e) { err = e.message; } finally { busy = false; } }
   async function reveal() {

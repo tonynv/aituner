@@ -8,6 +8,7 @@
   import Downloads from './steps/Downloads.svelte';
   import Report from './steps/Report.svelte';
   import Run from './steps/Run.svelte';
+  import Monitor from './steps/Monitor.svelte';
   import PinnedStats from './lib/PinnedStats.svelte';
   import { app, start, phaseTab, perfUnlocked, PERF_TABS, act } from './lib/app.svelte.js';
   import { api } from './lib/api.js';
@@ -16,6 +17,7 @@
     { tab: 'hardware', label: 'Hardware' },
     { tab: 'downloads', label: 'Downloads' },
     { tab: 'setup', label: 'Setup' },
+    { tab: 'monitor', label: 'Monitor' },
   ];
   const PERF = [
     { tab: 'benchmark', label: 'Benchmark' },
@@ -104,6 +106,7 @@
     <nav aria-label="Steps">
       <ol>
         {#each MAIN as s, i}
+          {#if i}<li class="chev faint" aria-hidden="true"><Icon name="chevron" size={14} /></li>{/if}
           {@render tabButton(s, i + 1)}
         {/each}
         <li class="sep" aria-hidden="true"></li>
@@ -115,6 +118,7 @@
     </nav>
     <main>
       {#if app.tab === 'setup'}<Run {st} />
+      {:else if app.tab === 'monitor'}<Monitor />
       {:else if app.tab === 'report'}<Report />
       {:else if app.tab === 'downloads'}<Downloads {st} onnext={() => (app.tab = 'setup')} />
       {:else if app.tab === 'benchmark'}<Benchmark {st} />
@@ -143,15 +147,19 @@
   .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
   .machine { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .banner { display: flex; gap: 8px; align-items: center; margin-top: 16px; padding: 12px 14px; border: 1px solid var(--bad); color: var(--bad); border-radius: var(--radius); }
-  nav { margin: 20px 0; overflow-x: auto; }
-  ol { list-style: none; display: flex; gap: 8px; padding: 0; margin: 0; min-width: max-content; }
-  .step { display: flex; align-items: center; gap: 10px; min-height: var(--tap); padding: 0 14px 0 8px; border: 1px solid var(--border); border-radius: var(--radius); background: transparent; cursor: pointer; color: var(--muted); }
+  /* A tab strip: the main path reads left to right like breadcrumbs (chevrons), the current tab is underlined. */
+  nav { margin: 16px 0 20px; overflow-x: auto; border-bottom: 1px solid var(--border); scrollbar-width: none; }
+  nav::-webkit-scrollbar { display: none; }
+  ol { list-style: none; display: flex; align-items: stretch; gap: 2px; padding: 0; margin: 0; min-width: max-content; }
+  .step { display: flex; align-items: center; gap: 8px; min-height: var(--tap); padding: 0 12px; margin-bottom: -1px; border: 0; border-bottom: 2px solid transparent; border-radius: var(--radius) var(--radius) 0 0; background: transparent; cursor: pointer; color: var(--muted); font-weight: 500; }
+  .step:hover:not(:disabled) { color: var(--text); background: var(--surface-2); }
   .step:disabled { cursor: not-allowed; color: var(--faint); }
-  .step.current { border-color: var(--text); color: var(--text); }
-  .step .num { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: 1px solid currentColor; border-radius: var(--radius); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .step.current { color: var(--text); border-bottom-color: var(--text); font-weight: 600; }
+  .step .num { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border: 1px solid currentColor; border-radius: var(--radius); font-size: 11px; font-variant-numeric: tabular-nums; }
   .step.done .num { background: var(--btn-bg); color: var(--btn-fg); border-color: var(--btn-bg); }
-  .sep { width: 1px; background: var(--border-strong); margin: 6px 4px; }
-  .group { align-self: center; font-size: 12px; white-space: nowrap; }
+  .chev { display: flex; align-items: center; transform: rotate(-90deg); }
+  .sep { width: 1px; background: var(--border-strong); margin: 12px 8px; }
+  .group { align-self: center; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; padding-right: 4px; }
   main { padding-top: 4px; }
   dialog { background: var(--surface); color: var(--text); border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 20px; max-width: min(520px, calc(100vw - 32px)); }
   dialog::backdrop { background: var(--overlay); }
