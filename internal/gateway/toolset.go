@@ -92,6 +92,12 @@ func coerce(v json.RawMessage, typ string) json.RawMessage {
 				return json.RawMessage(strconv.FormatFloat(f, 'f', -1, 64))
 			}
 		}
+	case "array", "object":
+		if isStr {
+			if t := strings.TrimSpace(s); t != "" && (t[0] == '[' || t[0] == '{') && json.Valid([]byte(t)) {
+				return json.RawMessage(t)
+			}
+		}
 	case "string":
 		if !isStr {
 			var n json.Number

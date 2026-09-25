@@ -122,11 +122,17 @@ func firstNonEmpty(rs ...json.RawMessage) json.RawMessage {
 
 // ExtractToolCalls finds declared-tool calls in text and returns the prose that remains.
 func ExtractToolCalls(text string, names ToolSet) (string, []Call) {
+	if strings.Contains(text, "<|channel|>") { // gpt-oss harmony channels: not plain text with a call inside
+		return extractHarmony(text, names)
+	}
 	if len(names) == 0 {
 		return strings.TrimSpace(stripSpecial(text)), nil
 	}
 	text = stripSpecial(text)
 	var calls []Call
+	if strings.Contains(text, "<function=") {
+		text, calls = extractFunctionXML(text, names)
+	}
 	cut := func(start, end int) { text = text[:start] + text[end:] }
 
 	// 1. <tool_call> ... </tool_call> (Hermes-style, used by Qwen and others); the closing tag may be missing
@@ -218,7 +224,7 @@ const (
 	tool                // a tool call: buffer everything until the message ends, then extract
 )
 
-var toolMarkers = []string{"<tool_call>", "<|python_tag|>"}
+var toolMarkers = []string{"<tool_call>", "<|python_tag|>", "<function=", "<|channel|>"}
 
 // classify decides from the text so far (leading whitespace ignored). Unrelated text passes immediately, so answers
 // stream normally; only text that could be a tool call is held back.
@@ -284,7 +290,7 @@ const (
 
 // scanMarkers begin a tool call mid-message. "```json" is included because Qwen-style models fence their call; a fenced
 // block that turns out not to be a declared tool call is released unchanged once its closing fence arrives.
-var scanMarkers = []string{"<tool_call>", "<|python_tag|>", "```json"}
+var scanMarkers = []string{"<tool_call>", "<|python_tag|>", "<function=", "<|channel|>", "```json"}
 
 func firstMarker(s string) (int, string) {
 	best, which := -1, ""

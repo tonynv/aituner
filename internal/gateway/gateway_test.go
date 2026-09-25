@@ -895,3 +895,41 @@ func TestSeveralToolCallsInOneTurnAreSentOnePerMessage(t *testing.T) {
 		t.Fatalf("text belongs to the first call only: %v / %v", msgs[1]["content"], msgs[3]["content"])
 	}
 }
+
+func TestQwenCoderXMLAndHarmonyFormats(t *testing.T) {
+	schema := json.RawMessage(`{"type":"object","properties":{"file_path":{"type":"string"},"limit":{"type":"integer"},"edits":{"type":"array"}},"required":["file_path"]}`)
+	tools := ToolSet{"Read": schema}
+	xml := "I will read it.\n<tool_call>\n<function=Read>\n<parameter=file_path>\n/tmp/a.py\n</parameter>\n<parameter=limit>\n20\n</parameter>\n<parameter=edits>\n[1,2]\n</parameter>\n</function>\n</tool_call>"
+	prose, calls := ExtractToolCalls(xml, tools)
+	if prose != "I will read it." || len(calls) != 1 || calls[0].Name != "Read" {
+		t.Fatalf("prose=%q calls=%+v", prose, calls)
+	}
+	var a map[string]any
+	json.Unmarshal(calls[0].Args, &a)
+	if a["file_path"] != "/tmp/a.py" || a["limit"] != float64(20) || len(a["edits"].([]any)) != 2 {
+		t.Fatalf("args: %s", calls[0].Args)
+	}
+	// undeclared functions are prose, and a streamed call never leaks its markup
+	if _, c := ExtractToolCalls("<function=Rm>\n<parameter=x>1</parameter>\n</function>", tools); len(c) != 0 {
+		t.Fatal("undeclared tool ran")
+	}
+	f := newFilter(tools)
+	var shown string
+	for _, r := range xml {
+		shown += f.Push(string(r))
+	}
+	rest, got := f.Finish()
+	if strings.Contains(shown+rest, "<function") || len(got) != 1 {
+		t.Fatalf("leaked %q / %q calls=%d", shown, rest, len(got))
+	}
+
+	// harmony: only the final channel reaches the user; a commentary call becomes a tool call
+	h := "<|channel|>analysis<|message|>thinking...<|end|><|start|>assistant<|channel|>final<|message|>There are 4 files.<|return|>"
+	if prose, c := ExtractToolCalls(h, tools); prose != "There are 4 files." || len(c) != 0 {
+		t.Fatalf("final: %q %+v", prose, c)
+	}
+	hc := `<|channel|>analysis<|message|>need to read<|end|><|start|>assistant<|channel|>commentary to=functions.Read <|constrain|>json<|message|>{"file_path":"/a"}<|call|>`
+	if prose, c := ExtractToolCalls(hc, tools); prose != "" || len(c) != 1 || c[0].Name != "Read" {
+		t.Fatalf("call: %q %+v", prose, c)
+	}
+}
