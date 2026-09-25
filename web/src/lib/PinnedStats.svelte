@@ -3,7 +3,7 @@
   import { fmtNum } from './format.js';
   // The headline numbers, pinned under the header on every tab. Data is the run being viewed: tuned results when they
   // exist (with the change against baseline), else baseline. Nothing is shown that was not measured.
-  let { st, onreport } = $props();
+  let { st, serve, onreport, onrun } = $props();
 
   const CHIPS = [
     { key: 'gpu_fp16_tflops', metric: 'gpu/mlx/matmul_fp16', label: 'GPU fp16', unit: 'TFLOPS' },
@@ -42,6 +42,12 @@
     {/if}
   </div>
   <div class="tail">
+    {#if serve && serve.server && serve.server.state !== 'stopped'}
+      <button class="chip serving" onclick={onrun} title="Open the Run view: {serve.server.repo}" aria-label="Model {serve.server.state}: {serve.server.repo}">
+        <span class="l">Model</span>
+        <span class="v">{serve.server.state === 'running' ? 'running' : serve.server.state === 'starting' ? 'loading' : serve.server.state}<span class="u"> {serve.server.repo?.split('/').pop()}</span></span>
+      </button>
+    {/if}
     {#if stage}<span class="stage faint">{stage}</span>{/if}
     <button class="btn small" onclick={onreport} disabled={!head}><Icon name="gauge" size={14} /> Report</button>
   </div>
@@ -58,6 +64,8 @@
   .d.faster { color: var(--ok); } .d.slower { color: var(--bad); }
   .tail { display: flex; gap: 10px; align-items: center; flex: none; }
   .stage { font-size: 12px; white-space: nowrap; }
+  .serving { cursor: pointer; color: var(--text); font: inherit; text-align: left; border-color: var(--ok); }
+  .serving .u { max-width: 120px; overflow: hidden; text-overflow: ellipsis; display: inline-block; vertical-align: bottom; white-space: nowrap; }
   .empty { font-size: 13px; padding: 6px 0; }
   @media (max-width: 560px) { .stage { display: none; } .chip { min-width: 78px; padding: 4px 8px; } }
 </style>

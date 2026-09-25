@@ -3,9 +3,11 @@ import { api, subscribe } from './api.js';
 // Single reactive store for the whole app (Svelte 5 runes in a module).
 export const app = $state({
   state: null,
+  serve: null, // model-server status, polled with the state so every tab can show it
   error: null, // connection / fatal
   view: null, // user-selected step; null = follow the server's step
   report: false, // showing the Report view instead of a step
+  run: false, // showing the Run view (serve a model, connect editors)
   log: [],
   lastSeq: 0,
   busy: false,
@@ -22,6 +24,7 @@ export async function refresh() {
   try {
     app.state = await api.state();
     app.error = null;
+    api.serve().then((v) => (app.serve = v)).catch(() => {});
   } catch (e) {
     app.error = e.status === 401 ? 'Session expired. Reopen aituner from its terminal window (press o).' : 'Cannot reach aituner. Is it still running?';
   }
