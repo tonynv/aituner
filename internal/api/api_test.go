@@ -18,6 +18,7 @@ import (
 
 	"github.com/tonynv/aituner/internal/bench"
 	"github.com/tonynv/aituner/internal/canirun"
+	"github.com/tonynv/aituner/internal/download"
 	"github.com/tonynv/aituner/internal/hf"
 	"github.com/tonynv/aituner/internal/platform"
 	"github.com/tonynv/aituner/internal/reco"
@@ -349,6 +350,72 @@ func TestDetectStreamsProbesThenState(t *testing.T) {
 	var st StateResp
 	if r.StatusCode != 200 || json.Unmarshal(b, &st) != nil || !st.Supported {
 		t.Fatalf("%d %s", r.StatusCode, b)
+	}
+}
+
+func TestClearModelsAndReports(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	prev := e.json(t, "GET", "/api/v1/reset", "", 200)
+	root := prev["models_dir"].(string)
+	// one real aituner download (marker), one folder the user made themselves (no marker), and a symlinked "model"
+	mk := func(repo string, marked bool) string {
+		d := filepath.Join(root, filepath.FromSlash(repo))
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		os.WriteFile(filepath.Join(d, "model.safetensors"), make([]byte, 1000), 0o644)
+		if marked {
+			os.WriteFile(filepath.Join(d, download.MarkerName), []byte(`{"repo":"`+repo+`","bytes":1000,"files":1}`), 0o644)
+		}
+		return d
+	}
+	ours := mk("mlx-community/Tiny-4bit", true)
+	mine := mk("me/my-own-model", false)
+	outside := t.TempDir()
+	os.WriteFile(filepath.Join(outside, download.MarkerName), []byte(`{"repo":"evil/link","bytes":1,"files":1}`), 0o644)
+	os.MkdirAll(filepath.Join(root, "evil"), 0o755)
+	os.Symlink(outside, filepath.Join(root, "evil", "link"))
+
+	r1, _ := e.s.tn.LatestRun(ctx)
+	seed(t, e, r1.ID, "baseline", 100)
+
+	prev = e.json(t, "GET", "/api/v1/reset", "", 200)
+	models := prev["models"].([]any)
+	if len(models) != 1 || models[0].(map[string]any)["repo"] != "mlx-community/Tiny-4bit" || prev["measured_runs"].(float64) != 1 {
+		t.Fatalf("preview must list only aituner's own download: %v", prev)
+	}
+	for body, want := range map[string]int{`{"models":true}`: 400, `{"confirm":true}`: 400} {
+		if r, b := e.do(t, "POST", "/api/v1/reset", body, e.authed(nil)); r.StatusCode != want {
+			t.Errorf("%s: %d %s", body, r.StatusCode, b)
+		}
+	}
+	// an applied tuning change blocks clearing reports (its record is what reverts it)
+	id, _ := e.s.tn.AddTuneChange(ctx, r1.ID, "k", "0", "1")
+	if r, _ := e.do(t, "POST", "/api/v1/reset", `{"reports":true,"confirm":true}`, e.authed(nil)); r.StatusCode != 409 {
+		t.Fatalf("cleared reports with an applied change: %d", r.StatusCode)
+	}
+	e.s.tn.MarkReverted(ctx, id)
+
+	res := e.json(t, "POST", "/api/v1/reset", `{"models":true,"reports":true,"confirm":true}`, 200)
+	if d := res["models_deleted"].([]any); len(d) != 1 || res["runs_deleted"].(float64) < 1 {
+		t.Fatalf("%v", res)
+	}
+	if _, err := os.Stat(ours); !os.IsNotExist(err) {
+		t.Fatal("aituner's model is still there")
+	}
+	if _, err := os.Stat(filepath.Join(mine, "model.safetensors")); err != nil {
+		t.Fatal("deleted a folder aituner did not download")
+	}
+	if _, err := os.Stat(filepath.Join(outside, download.MarkerName)); err != nil {
+		t.Fatal("followed a symlink out of the models folder")
+	}
+	st := getState(t, e)
+	if st.Run == nil || st.Phase != store.PhaseDetected {
+		t.Fatalf("a fresh run must exist after clearing: %+v", st.Run)
+	}
+	if def, b := e.do(t, "GET", "/api/v1/report", "", e.authed(nil)); def.StatusCode != 409 || !strings.Contains(string(b), "no_results") {
+		t.Fatalf("reports must be empty: %d %s", def.StatusCode, b)
 	}
 }
 

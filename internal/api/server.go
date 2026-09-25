@@ -257,6 +257,8 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("GET /api/v1/events", s.handleEvents)
 	api.HandleFunc("GET /api/v1/health", s.handleHealth)
 	api.HandleFunc("GET /api/v1/monitor", s.handleMonitor)
+	api.HandleFunc("GET /api/v1/reset", s.handleResetPreview)
+	api.HandleFunc("POST /api/v1/reset", s.handleReset)
 	api.HandleFunc("POST /api/v1/monitor/tool", s.handleMonitorTool)
 	api.HandleFunc("POST /api/v1/detect", s.handleDetect)
 	api.HandleFunc("POST /api/v1/runs", s.handleNewRun)

@@ -299,3 +299,17 @@ func TestQueueOrderFailureAndCancel(t *testing.T) {
 		t.Fatalf("order: %v", started)
 	}
 }
+
+func TestListSkipsSymlinkedModels(t *testing.T) {
+	root, outside := t.TempDir(), t.TempDir()
+	os.WriteFile(filepath.Join(outside, MarkerName), []byte(`{"repo":"org/link","bytes":1,"files":1}`), 0o644)
+	os.MkdirAll(filepath.Join(root, "org", "real"), 0o755)
+	os.WriteFile(filepath.Join(root, "org", "real", MarkerName), []byte(`{"repo":"org/real","bytes":1,"files":1}`), 0o644)
+	if err := os.Symlink(outside, filepath.Join(root, "org", "link")); err != nil {
+		t.Fatal(err)
+	}
+	got := New(nil).List(root)
+	if len(got) != 1 || got[0].Repo != "org/real" {
+		t.Fatalf("%+v", got)
+	}
+}

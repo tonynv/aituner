@@ -427,6 +427,9 @@ func (m *Manager) List(root string) []Status {
 			}
 			subs, _ := os.ReadDir(filepath.Join(root, o.Name()))
 			for _, s := range subs {
+				if !s.IsDir() { // plain folders only: a symlink could point anywhere
+					continue
+				}
 				dest := filepath.Join(root, o.Name(), s.Name())
 				repo := o.Name() + "/" + s.Name()
 				if n, ok := Complete(dest, repo); ok {
