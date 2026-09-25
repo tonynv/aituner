@@ -89,7 +89,7 @@ isolation is enforced in the data layer instead.
 ```sh
 go vet ./... && go test -race -count=1 ./...      # unit + real-hardware tests
 AITUNER_LIVE=1 go test -count=1 -v ./...          # also hits canirun.ai / Hugging Face and runs the full benchmark
-cd web && npm run check && npm run build          # Svelte diagnostics, then build into internal/webui/dist
+cd web && npm run check && npm run build          # Svelte diagnostics + lint (undefined identifiers), then build into internal/webui/dist
 ```
 
 Layout: `cmd/aituner` (entry point, TUI) · `internal/store` (SQLite, tenant-scoped) · `internal/platform` (OS seam,

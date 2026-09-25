@@ -3,7 +3,6 @@
   import PlanDialog from './PlanDialog.svelte';
   import Copyable from './Copyable.svelte';
   import { api } from './api.js';
-  import { app } from './app.svelte.js';
 
   let { item, project, disabledReason = '', jobRunning = false, onchange } = $props();
   let dlg;

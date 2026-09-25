@@ -4,7 +4,7 @@
   import MetricsTable from '../lib/MetricsTable.svelte';
   import Icon from '../lib/Icon.svelte';
   import Warnings from '../lib/Warnings.svelte';
-  import { app, act } from '../lib/app.svelte.js';
+  import { act } from '../lib/app.svelte.js';
   import { api } from '../lib/api.js';
 
   let { st } = $props();
