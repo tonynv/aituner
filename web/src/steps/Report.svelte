@@ -182,7 +182,7 @@
   .il { font-size: 13px; color: var(--muted); } .iv { font-size: 26px; font-weight: 600; } .u { font-size: 14px; font-weight: 400; color: var(--muted); margin-left: 3px; }
   .meter { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; } .meter span { display: block; height: 100%; background: var(--series-1); }
   .note { font-size: 13px; margin: 2px 0 0; } .ins.warn .note { color: var(--warn); }
-  .formula { font-size: 11.5px; margin: 4px 0 0; }
+  .formula { font-size: 12px; margin: 4px 0 0; color: var(--muted); }
   .list { display: grid; padding: 0; }
   .mrow { display: grid; grid-template-columns: minmax(180px, 1.2fr) minmax(200px, 2fr) minmax(120px, 0.8fr); gap: 16px; align-items: center; padding: 12px 16px; border-top: 1px solid var(--border); }
   .mrow:first-child { border-top: 0; }

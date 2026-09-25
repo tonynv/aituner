@@ -58,9 +58,9 @@
   .strip { display: flex; gap: 8px; overflow-x: auto; flex: 1; min-width: 0; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
   .strip::-webkit-scrollbar { display: none; }
   .chip { display: flex; flex-direction: column; gap: 1px; padding: 5px 10px; border: 1px solid var(--border); background: var(--surface); border-radius: var(--radius); flex: none; min-width: 84px; }
-  .l { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; }
-  .v { font-size: 14px; font-weight: 600; white-space: nowrap; } .u { font-weight: 400; color: var(--muted); font-size: 11px; margin-left: 3px; }
-  .d { font-size: 11px; color: var(--muted); }
+  .l { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; }
+  .v { font-size: 14px; font-weight: 600; white-space: nowrap; } .u { font-weight: 400; color: var(--muted); font-size: 12px; margin-left: 3px; }
+  .d { font-size: 12px; color: var(--muted); }
   .d.faster { color: var(--ok); } .d.slower { color: var(--bad); }
   .tail { display: flex; gap: 10px; align-items: center; flex: none; }
   .stage { font-size: 12px; white-space: nowrap; }

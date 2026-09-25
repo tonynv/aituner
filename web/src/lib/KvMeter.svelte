@@ -53,7 +53,7 @@
   .weights { background: var(--text); }
   .runtime { background: var(--faint); }
   .used { background: var(--ok); }
-  .spare { background: repeating-linear-gradient(135deg, var(--border-strong) 0 3px, transparent 3px 6px); }
+  .spare { background: repeating-linear-gradient(135deg, var(--muted) 0 2px, transparent 2px 5px); } /* >= 7:1 against the bar track in both themes */
   .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
   .k { display: inline-flex; align-items: center; gap: 6px; }
   .sw { width: 10px; height: 10px; border-radius: 1px; display: inline-block; }

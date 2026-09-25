@@ -27,7 +27,7 @@
     --btn-bg: #0a0a0a; --btn-fg: #ffffff; --btn-hover: #262626;
     --ok: #1b6e46; --warn: #8a5a00; --bad: #b02a22;
     --diff-add-bg: #eaf5ee; --diff-del-bg: #fbecea; --focus: #0a0a0a;
-    --series-1: #2a78d6; --series-2: #eb6834;
+    --series-1: #2a78d6; --series-2: #d95926;
     color-scheme: light;
   }
 }
@@ -37,7 +37,7 @@
   --btn-bg: #0a0a0a; --btn-fg: #ffffff; --btn-hover: #262626;
   --ok: #1b6e46; --warn: #8a5a00; --bad: #b02a22;
   --diff-add-bg: #eaf5ee; --diff-del-bg: #fbecea; --focus: #0a0a0a;
-  --series-1: #2a78d6; --series-2: #eb6834;
+  --series-1: #2a78d6; --series-2: #d95926;
   color-scheme: light;
 }
 

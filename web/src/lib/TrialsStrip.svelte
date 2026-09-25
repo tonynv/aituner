@@ -8,7 +8,7 @@
   const half = $derived(Math.max(0.1, dev * 1.15)); // fraction of the median
   const pos = (v) => (median ? 50 + ((v - median) / (Math.abs(median) * half)) * 50 : 50);
   let tip = $state(null);
-  const desc = $derived(`${label}: ${values.length} trials, median ${fmtNum(median)} ${unit}, largest deviation ${(dev * 100).toFixed(1)} percent`);
+  const desc = $derived(`${label}: ${values.length} trials (${values.map((v) => fmtNum(v)).join(', ')} ${unit}), median ${fmtNum(median)} ${unit}, largest deviation ${(dev * 100).toFixed(1)} percent`);
 </script>
 
 <div class="strip" role="img" aria-label={desc}>
@@ -23,11 +23,11 @@
 </div>
 
 <style>
-  .strip { position: relative; height: 30px; min-width: 140px; margin: 0 6px; }
+  .strip { position: relative; height: 32px; min-width: 140px; margin: 0 6px; }
   .axis { position: absolute; left: 0; right: 0; top: 9px; height: 1px; background: var(--border-strong); }
   .median { position: absolute; top: 2px; width: 2px; height: 16px; background: var(--text); transform: translateX(-1px); }
   .dot { position: absolute; top: 3px; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; background: var(--series-1); box-shadow: 0 0 0 2px var(--surface); cursor: default; }
   .dot:hover { box-shadow: 0 0 0 2px var(--text); }
-  .end { position: absolute; top: 18px; font-size: 10px; color: var(--muted); } .end.l { left: 0; } .end.r { right: 0; }
+  .end { position: absolute; top: 18px; font-size: 11px; color: var(--muted); } .end.l { left: 0; } .end.r { right: 0; }
   .tip { position: absolute; bottom: 100%; transform: translateX(-50%); background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 3px 8px; font-size: 12px; white-space: nowrap; pointer-events: none; z-index: 5; }
 </style>

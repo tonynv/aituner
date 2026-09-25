@@ -57,5 +57,6 @@
   .badges { gap: 6px; }
   .note { font-size: 13px; margin: 0; }
   .cmdwrap summary { min-height: 36px; font-size: 13px; color: var(--muted); gap: 6px; }
+  @media (pointer: coarse) { .cmdwrap summary { min-height: var(--tap); } }
   .between { justify-content: space-between; }
 </style>

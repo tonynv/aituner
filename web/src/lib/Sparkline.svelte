@@ -13,7 +13,7 @@
   const last = $derived(mean(values.slice(values.length - third)));
   const path = $derived(values.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' '));
   let tip = $state(null);
-  const desc = $derived(`${label}: ${values.length} one-second samples, first third averages ${fmtNum(first)} ${unit}, last third ${fmtNum(last)} ${unit}`);
+  const desc = $derived(`${label}: ${values.length} one-second samples from ${fmtNum(Math.min(...values))} to ${fmtNum(Math.max(...values))} ${unit}; first third averages ${fmtNum(first)} ${unit}, last third ${fmtNum(last)} ${unit}`);
 </script>
 
 <div class="wrap">
@@ -43,7 +43,7 @@
   .line { fill: none; stroke: var(--series-1); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
   .hit { fill: transparent; }
   .hit:hover { fill: var(--series-1); stroke: var(--surface); stroke-width: 2; r: 4; }
-  .lbl { font: 10px var(--font-mono); fill: var(--muted); }
+  .lbl { font: 11px var(--font-mono); fill: var(--muted); }
   .legend { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-top: 2px; }
   .legend strong { color: var(--text); font-weight: 600; }
   .tip { position: absolute; top: 0; transform: translateX(-50%); background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 3px 8px; font-size: 12px; white-space: nowrap; pointer-events: none; z-index: 5; }
