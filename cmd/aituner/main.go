@@ -127,6 +127,7 @@ func run(port int, noTUI, noOpen bool) error {
 		return err
 	}
 	stop()
+	srv.Close() // stops the gateway and the model server so no model keeps GPU memory after aituner exits
 	shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	return httpSrv.Shutdown(shutdown)

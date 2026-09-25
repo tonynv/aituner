@@ -119,3 +119,6 @@ type Platform interface {
 	Detect(ctx context.Context) (*Hardware, error)
 	DataDir() (string, error)
 }
+
+// MLXVersion returns the installed mlx version ("" if not installed).
+func (m MLXStatus) MLXVersion() string { return m.MLX }

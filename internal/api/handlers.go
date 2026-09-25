@@ -15,6 +15,7 @@ import (
 	"github.com/tonynv/aituner/internal/platform"
 	"github.com/tonynv/aituner/internal/reco"
 	"github.com/tonynv/aituner/internal/report"
+	"github.com/tonynv/aituner/internal/serve"
 	"github.com/tonynv/aituner/internal/store"
 	"github.com/tonynv/aituner/internal/tune"
 )
@@ -53,6 +54,7 @@ type StateResp struct {
 	Unlocked  bool                       `json:"recommendations_unlocked"`
 	Headline  map[string]report.Headline `json:"headline"`
 	BudgetGB  float64                    `json:"budget_gb"`
+	Serving   *servingBrief              `json:"serving,omitempty"`
 }
 
 func toMetrics(rs []store.Result, stage string) []bench.Metric { return report.MetricsFrom(rs, stage) }
@@ -167,6 +169,9 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		resp.Headline["tuned"] = report.HeadlineOf(resp.Tuned)
 	}
 	resp.BudgetGB = s.budgetGB(r.Context(), run.ID, hw)
+	if ss := s.serve.Status(); ss.State != serve.StateStopped {
+		resp.Serving = &servingBrief{State: ss.State, Repo: ss.Repo}
+	}
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -227,6 +232,10 @@ func (s *Server) handleBenchmark(w http.ResponseWriter, r *http.Request) {
 		running, okPhase, failPhase, stage = store.PhaseTunedRunning, store.PhaseTunedDone, store.PhaseTuneReviewed, "tuned"
 	default:
 		writeErr(w, http.StatusConflict, "wrong_phase", fmt.Sprintf("cannot start a benchmark while the run is %q", run.Phase))
+		return
+	}
+	if st := s.serve.Status().State; st == serve.StateStarting || st == serve.StateRunning || st == serve.StateStopping {
+		writeErr(w, http.StatusConflict, "model_running", "a model is loaded: it would distort the benchmark and compete for GPU memory. Stop it first")
 		return
 	}
 	if s.dl.Active() {
@@ -545,4 +554,10 @@ func (s *Server) handleRecommendations(w http.ResponseWriter, r *http.Request) {
 	}
 	s.rememberOffered(out)
 	writeJSON(w, http.StatusOK, out)
+}
+
+// servingBrief is the small piece of model-server state the pinned bar shows on every tab.
+type servingBrief struct {
+	State string `json:"state"`
+	Repo  string `json:"repo"`
 }

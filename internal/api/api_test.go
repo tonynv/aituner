@@ -21,6 +21,7 @@ import (
 	"github.com/tonynv/aituner/internal/hf"
 	"github.com/tonynv/aituner/internal/platform"
 	"github.com/tonynv/aituner/internal/reco"
+	"github.com/tonynv/aituner/internal/serve"
 	"github.com/tonynv/aituner/internal/store"
 	"github.com/tonynv/aituner/internal/tune"
 )
@@ -572,5 +573,62 @@ func TestReportEndpointsRejectBadInput(t *testing.T) {
 	st := getState(t, e)
 	if st.Headline["baseline"].MLXGen != 100 || st.Headline["baseline"].GPUBW != 355 {
 		t.Fatalf("headline: %+v", st.Headline)
+	}
+}
+
+func TestServeEndpointsAreGatedAndNeverServeArbitraryPaths(t *testing.T) {
+	e := newEnv(t)
+	post := func(path, body string, want int) map[string]any { return e.json(t, "POST", path, body, want) }
+	st := e.json(t, "GET", "/api/v1/serve", "", 200)
+	if st["server"].(map[string]any)["state"] != "stopped" || st["runtime"].(map[string]any)["ready"] != false || st["gateway"] != nil || len(st["models"].([]any)) != 0 {
+		t.Fatalf("idle state: %v", st)
+	}
+	if hint := st["key_hint"].(string); !strings.HasPrefix(hint, "…") || len(hint) > 8 {
+		t.Fatalf("polled state must carry only a hint of the key, never the key: %q", hint)
+	}
+	if strings.Contains(fmt.Sprint(st), e.s.gwKey) {
+		t.Fatal("the gateway key leaked into the polled state")
+	}
+	key := e.json(t, "GET", "/api/v1/serve/key", "", 200)["key"].(string)
+	if key != e.s.gwKey || !strings.HasPrefix(key, "aituner-") {
+		t.Fatalf("key: %q", key)
+	}
+	if r, _ := e.do(t, "GET", "/api/v1/serve/key", "", nil); r.StatusCode != 401 {
+		t.Fatalf("the key needs auth: %d", r.StatusCode)
+	}
+	for _, bad := range []string{`{"repo":""}`, `{"repo":"a/b; rm -rf ~"}`, `{"repo":"../../etc/passwd"}`, `{"repo":"/etc"}`} {
+		post("/api/v1/serve/start", bad, 400)
+	}
+	post("/api/v1/serve/start", `{"repo":"mlx-community/Qwen3-8B-4bit","model_dir":"/etc"}`, 400) // unknown fields refused
+	if m := post("/api/v1/serve/start", `{"repo":"mlx-community/Qwen3-8B-4bit"}`, 409); m["error"] != "no_runtime" {
+		t.Fatalf("no MLX runtime in the temp data dir: %v", m)
+	}
+	if lines := e.json(t, "GET", "/api/v1/serve/logs", "", 200)["lines"]; lines == nil {
+		t.Fatal("logs must be an array")
+	}
+	post("/api/v1/serve/stop", `{}`, 200) // stopping nothing is fine
+	e.json(t, "POST", "/api/v1/serve/runtime", `{"x":1}`, 400)
+}
+
+// A loaded model competes for the GPU and would corrupt benchmark numbers, so the benchmark is refused meanwhile.
+func TestBenchmarkIsRefusedWhileAModelIsLoaded(t *testing.T) {
+	e := newEnv(t)
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "mlx_lm.server")
+	os.WriteFile(bin, []byte("#!/bin/sh\nexec sleep 300\n"), 0o755) // a real process that never becomes ready: state stays "starting"
+	if err := e.s.serve.Start(context.Background(), serve.Spec{Bin: bin, ModelDir: dir, Repo: "x/y"}); err != nil {
+		t.Fatal(err)
+	}
+	defer e.s.Close()
+	m := e.json(t, "POST", "/api/v1/benchmark", `{"confirm_downloads":true}`, 409)
+	if m["error"] != "model_running" {
+		t.Fatalf("%v", m)
+	}
+	if st := getState(t, e); st.Serving == nil || st.Serving.Repo != "x/y" || st.Phase != store.PhaseDetected {
+		t.Fatalf("serving must show in state and the run must be untouched: %+v phase=%s", st.Serving, st.Phase)
+	}
+	e.s.serve.Stop()
+	if st := getState(t, e); st.Serving != nil {
+		t.Fatalf("stopped: %+v", st.Serving)
 	}
 }

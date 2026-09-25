@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -22,9 +23,11 @@ import (
 	"github.com/tonynv/aituner/internal/bench"
 	"github.com/tonynv/aituner/internal/canirun"
 	"github.com/tonynv/aituner/internal/download"
+	"github.com/tonynv/aituner/internal/gateway"
 	"github.com/tonynv/aituner/internal/hf"
 	"github.com/tonynv/aituner/internal/platform"
 	"github.com/tonynv/aituner/internal/reco"
+	"github.com/tonynv/aituner/internal/serve"
 	"github.com/tonynv/aituner/internal/store"
 	"github.com/tonynv/aituner/internal/tune"
 	"github.com/tonynv/aituner/internal/webui"
@@ -56,6 +59,10 @@ type Server struct {
 	jobs    *jobs
 	engine  *reco.Engine
 	dl      *download.Manager
+	serve   *serve.Manager
+	gwKey   string
+	gw      *http.Server // the gateway listener; non-nil while a model is served (guarded by mu)
+	gwPort  int
 	allowed map[string]bool // repos the recommender has offered: the only ones downloads may fetch (guarded by mu)
 
 	mu          sync.Mutex           // guards hw, unsupported, hosts, launch
@@ -77,7 +84,16 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 	if cfg.Log == nil {
 		cfg.Log = func(string) {}
 	}
-	s := &Server{cfg: cfg, ctx: ctx, tn: cfg.Store.ForTenant(id), jobs: newJobs(), hosts: map[string]bool{}, allowed: map[string]bool{}, dl: download.New(cfg.HF), launch: map[string]time.Time{}, launchTTL: 15 * time.Minute}
+	s := &Server{cfg: cfg, ctx: ctx, tn: cfg.Store.ForTenant(id), jobs: newJobs(), hosts: map[string]bool{}, allowed: map[string]bool{}, dl: download.New(cfg.HF), serve: serve.New(), launch: map[string]time.Time{}, launchTTL: 15 * time.Minute}
+	s.serve.PIDFile = filepath.Join(cfg.DataDir, "serve.pid")
+	if reaped, _ := serve.ReapStale(s.serve.PIDFile); reaped {
+		cfg.Log("stopped a model server left over from a previous run")
+	}
+	if k, err := gateway.LoadOrCreateKey(filepath.Join(cfg.DataDir, "gateway.key")); err == nil {
+		s.gwKey = k
+	} else {
+		return nil, fmt.Errorf("gateway key: %w", err)
+	}
 	s.engine = &reco.Engine{CanIRun: cfg.CanIRun, HF: cfg.HF, Cache: storeCache{s.tn}}
 	if err := s.refreshHW(ctx); err != nil && !errors.Is(err, platform.ErrUnsupported) {
 		return nil, err
@@ -221,6 +237,12 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("GET /api/v1/runs", s.handleListRuns)
 	api.HandleFunc("GET /api/v1/report", s.handleReport)
 	api.HandleFunc("GET /api/v1/compare", s.handleCompare)
+	api.HandleFunc("GET /api/v1/serve", s.handleServeStatus)
+	api.HandleFunc("GET /api/v1/serve/key", s.handleServeKey)
+	api.HandleFunc("GET /api/v1/serve/logs", s.handleServeLogs)
+	api.HandleFunc("POST /api/v1/serve/runtime", s.handleServeRuntime)
+	api.HandleFunc("POST /api/v1/serve/start", s.handleServeStart)
+	api.HandleFunc("POST /api/v1/serve/stop", s.handleServeStop)
 	api.HandleFunc("GET /api/v1/settings", s.handleGetSettings)
 	api.HandleFunc("PUT /api/v1/settings", s.handlePutSettings)
 	api.HandleFunc("GET /api/v1/downloads", s.handleListDownloads)
