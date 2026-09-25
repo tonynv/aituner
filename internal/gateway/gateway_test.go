@@ -933,3 +933,15 @@ func TestQwenCoderXMLAndHarmonyFormats(t *testing.T) {
 		t.Fatalf("call: %q %+v", prose, c)
 	}
 }
+
+func TestHarmonyReplyStreamsAsItsFinalChannelOnly(t *testing.T) {
+	f := newFilter(ToolSet{"Read": nil})
+	var shown string
+	for _, r := range "<|channel|>analysis<|message|>hm<|start|>assistant<|channel|>final<|message|>Hello there." {
+		shown += f.Push(string(r))
+	}
+	rest, calls := f.Finish()
+	if shown+rest != "Hello there." || len(calls) != 0 {
+		t.Fatalf("shown=%q rest=%q", shown, rest)
+	}
+}

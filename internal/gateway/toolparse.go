@@ -443,7 +443,7 @@ func (f *filter) Finish() (string, []Call) {
 		return rest, nil
 	}
 	prose, calls := ExtractToolCalls(rest, f.names)
-	if len(calls) == 0 {
+	if len(calls) == 0 && !strings.Contains(rest, "<|channel|>") { // harmony replies are always rewritten to their final channel
 		return stripSpecial(rest), nil
 	}
 	return prose, calls
