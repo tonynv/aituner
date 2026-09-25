@@ -33,6 +33,7 @@ Legend: [x] done, [~] partial, [ ] not done. Build order: DataStore -> API -> UI
 - D1: SQLite has no RLS (app-level tenant scoping + isolation test). Accept, or switch to local PostgreSQL?
 - Approve the macOS admin dialog once to exercise the wired-limit apply (the only path not run end to end)
 - Cut v0.1.0 (annotated tag, no attribution) and merge build/v0.1 into main when satisfied
+- D2: Developer ID signing + notarization of aituner.app so it opens on other Macs (needs an Apple Developer account)
 
 ## P12 Flow: detect -> downloads (queue) -> setup
 - [x] Fresh run + detection on every launch; home page is Hardware
@@ -48,3 +49,29 @@ Legend: [x] done, [~] partial, [ ] not done. Build order: DataStore -> API -> UI
 - [x] Prompt-cache bound; context reported without a benchmark
 - [x] End-to-end timing of lean Claude Code turns per model; recommended coding model documented (SPEC 16.9)
 - [x] Low-refusal MoE candidates found on Hugging Face and benchmarked (froggeric Qwen3.6-35B-A3B Heretic, nightmedia gpt-oss-20B Heretic)
+
+## P14 macOS app (drag to Applications, menu bar, background)
+- [x] `--app` line protocol (link per stdin line, exit on stdin close) + test; preflight shared in scripts/preflight.sh
+- [x] Swift/AppKit shell: native window, menu bar panel, closing the window keeps it running, Quit stops the server cleanly
+- [x] build_app.sh: icon from the web SVG, Info.plist, ad hoc hardened-runtime signing, drag-to-Applications dmg, --install
+- [x] Verified: app launches from Finder-style `open`, window on screen and UI loaded; SIGKILL of the app stops the server
+- [ ] Owner check: menu bar icon + panel, close-to-menu-bar, Quit (this session has no screen access to see them)
+- [ ] QA gate (tonynv-qa) + UI/UX gate on the app window and panel, dark/light
+
+## P15 Live monitor
+- [x] Health: GPU utilisation from IOAccelerator; GET /api/v1/health
+- [x] internal/monitor (macmon stream, built-in fallback, on-demand, ring buffer) with real-capture, fake and live tests
+- [x] Terminal monitors (macmon, mactop, nvtop): install via Homebrew after confirmation, open in Terminal
+- [x] GET /api/v1/monitor, POST /api/v1/monitor/tool
+- [x] Monitor tab, menu bar view, Setup opens Monitor once a model serves; tab strip restyled (breadcrumb chevrons, underline)
+- [ ] Gateway throughput (tokens/s of real requests) on the Monitor
+
+## Known failing
+- `internal/tune` TestAgentInstallRunsAtLoadAndRemoves fails on this machine with and without the P14/P15 changes
+  ("the agent ran but the variables are not set"): the LaunchAgent env persistence check, not yet investigated
+
+## Requested next (owner, 2026-09-25), not started
+- Chat with the running model from the Monitor screen (Claude-web-like)
+- Knowledge base folder (local) for RAG over the running model
+- Local Skills repo, loadable into any running model
+- Pinned auto-start models/agents: start at login, reserve their memory, shown in machine capabilities, and counted by the recommender

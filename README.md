@@ -14,6 +14,11 @@ aituner opens a local web UI. **Every launch starts at the Hardware home page an
    then installs, configures and verifies it, so you can open your project and start coding. Each tool gets its own isolated profile: your own editor
    settings and dotfiles are never modified.
 
+4. **Monitor**: live GPU utilisation and frequency, CPU, power, temperatures and memory, charted over the last five minutes,
+   with the running model. Setup switches here once a model is serving. Stats come from [macmon](https://github.com/vladkens/macmon)
+   when installed (no admin needed), otherwise from a built-in sampler (GPU and memory). It can also install and open the
+   terminal monitors macmon, mactop and nvtop.
+
 An optional **performance track** (Benchmark, Tune, Re-run, Report) measures memory bandwidth, GPU compute and LLM speed (MLX and Ollama), shows a reviewable
 diff of system changes (nothing is applied until you approve it), and re-runs for a before/after comparison that separates real change from noise. Its numbers
 are pinned across the top of every view (from the last measured run until this launch has its own), and they add speed estimates to the model list.
@@ -22,7 +27,19 @@ are pinned across the top of every view (from the last measured run until this l
 binary say so plainly instead of pretending. See [`SPECS/SPEC.md`](SPECS/SPEC.md) for the design, measured results and
 known gaps, and [`TASKS.md`](TASKS.md) for progress.
 
-## Run it
+## Install the Mac app
+
+```sh
+./build_app.sh             # builds dist/aituner.app and dist/aituner.dmg
+./build_app.sh --install   # ... and copies it into /Applications
+```
+
+Open `dist/aituner.dmg` and drag **aituner** onto **Applications**, then keep it in the Dock (right-click its Dock icon,
+Options, Keep in Dock). The app shows the UI in its own window and puts a gauge icon in the menu bar: click it for the live
+model and GPU utilisation. Closing the window keeps aituner (and a running model) going in the menu bar; **Quit** stops it.
+The build is signed for this Mac only (ad hoc); see SPEC §16.10.
+
+## Run it from a terminal
 
 ```sh
 ./run_aituner.sh
@@ -94,7 +111,7 @@ cd web && npm run check && npm run build          # Svelte diagnostics + lint (u
 
 Layout: `cmd/aituner` (entry point, TUI) · `internal/store` (SQLite, tenant-scoped) · `internal/platform` (OS seam,
 macOS detection) · `internal/bench` (suites) · `internal/tune` (plan/apply/revert) · `internal/reco` (recommendations) ·
-`internal/api` (HTTP, SSE, phase gates) · `web/` (Svelte PWA).
+`internal/api` (HTTP, SSE, phase gates) · `internal/monitor` (live stats) · `web/` (Svelte PWA) · `macos/` (app shell).
 
 ## Uninstall
 

@@ -54,7 +54,8 @@ Every result is tied to a `run` (one pass through the flow) so history is kept a
 ## 4. Architecture
 
 ```
-cmd/aituner            main: flags, TUI, server lifecycle, browser open
+cmd/aituner            main: flags, TUI, server lifecycle, browser open, --app line protocol for the macOS app
+macos/                 macOS app shell (Swift/AppKit, one file), icon renderer, Info.plist template
 internal/store         SQLite, migrations, tenant-scoped repository
 internal/api           HTTP handlers, auth/host/origin middleware, SSE, phase gate
 internal/platform      Platform interface + darwin impl (+ linux stub returning ErrUnsupported)
@@ -65,8 +66,10 @@ internal/tune          Tunable interface: Current / Propose / Diff / Apply / Rev
 internal/canirun       canirun.ai API client
 internal/hf            Hugging Face Hub API client (MLX resolution, sizes, provenance)
 internal/reco          recommendation pipeline (§7)
+internal/monitor       live samples: macmon stream or built-in fallback, in-memory 10-minute ring
 web/                   Svelte SPA
-run_aituner.sh         preflight + build + launch
+run_aituner.sh         preflight + build + launch (shared steps in scripts/preflight.sh)
+build_app.sh           builds dist/aituner.app + dist/aituner.dmg; --install copies it to /Applications
 ```
 
 `platform.Platform` is the only place that knows about the OS: `Detect()`, `Tunables()`, `Runtimes()`,
@@ -205,7 +208,8 @@ the app on the user's first Run click, after consent. Never uses `sudo`. On Linu
 - Per-launch random 256-bit session token that **never appears in a URL, argv or the terminal**. The browser is handed a
   **single-use, 15-minute launch nonce** (`?t=`), exchanged once for an `HttpOnly`, `SameSite=Strict` cookie carrying the
   session token; replays, expired and evicted nonces (max 8 outstanding) set nothing. All `/api` requires the cookie
-  (constant-time compare). The TUI mints a fresh link per `o` press.
+  (constant-time compare). The TUI mints a fresh link per `o` press; the macOS app gets each link over the child's
+  stdout (`--app`: one `link <url>` line per stdin line), never through argv or a file.
 - `Host` allow-list (`127.0.0.1:port`, `localhost:port`) to defeat DNS rebinding; `Origin` must match on
   non-GET; CSRF-safe by cookie + Origin check; strict CSP, `X-Content-Type-Options`, no CORS.
 - Privileged actions only through §7's allow-listed tunables — no generic "run command" endpoint. Arguments are
@@ -217,7 +221,8 @@ the app on the user's first Run click, after consent. Never uses `sudo`. On Linu
 
 ## 11. UI
 
-Five-step stepper, monochrome-forward, near-black dark / true-white light, mono + sans type, thin-line icons,
+Tab strip: the main path (Hardware > Downloads > Setup > Monitor) reads left to right with chevrons, the current tab is
+underlined; the optional performance tabs sit after a divider. Originally a five-step stepper; monochrome-forward, near-black dark / true-white light, mono + sans type, thin-line icons,
 44px+ touch targets, safe-area aware, offline shell via service worker (API calls need the server; UI degrades
 with a clear banner). Diff view for tuning; before/after table with delta and "within noise" marking; recommendation
 cards grouped code / chat / image with fit grade, runtime, size, estimated tok/s, provenance and one-click
@@ -236,13 +241,18 @@ are reported honestly in `TASKS.md`.
 - mlx-lm: https://github.com/ml-explore/mlx-lm (benchmark script, wired-limit guidance); PyPI `mlx`, `mlx-lm`
 - Ollama FAQ (env vars, macOS `launchctl setenv`): https://docs.ollama.com/faq
 - Hugging Face Hub API: https://huggingface.co/docs/hub/api
-- Apple: `sysctl iogpu.*`, `pmset`, `system_profiler` (man pages / on-device output)
+- Apple: `sysctl iogpu.*`, `pmset`, `system_profiler`, `ioreg -c IOAccelerator` (man pages / on-device output)
+- macmon README and `macmon pipe --help` (0.8.2): https://github.com/vladkens/macmon; mactop README: https://github.com/metaspartan/mactop;
+  nvtop README (Apple support "limited"): https://github.com/Syllo/nvtop
+- Apple developer documentation: AppKit (NSStatusItem, NSPopover, activation policy), WebKit (WKWebView, WKDownload,
+  WKScriptMessageHandler), `codesign`, `iconutil`, `hdiutil` man pages
 
 ## 14. Open decisions for the owner
 
 - D1 (above): SQLite + app-level tenant scoping instead of true RLS.
 - Bubble Tea TUI wraps a web UI (standards say Go binaries are TUIs; product requires a browser UI) — both are provided.
 - Licence for the repo (none chosen yet).
+- D2: Developer ID signing + notarization of aituner.app (needs an Apple Developer account) so it opens on other Macs.
 
 4. **Persist Ollama env (opt-in, user-level, no admin)** — per-user LaunchAgent `ai.aituner.ollama-env`, built with `plutil`
    argv (no shell), lint-checked, `launchctl bootstrap gui/<uid>`, then **`kickstart -k`** and verified by reading the
@@ -449,3 +459,46 @@ Measured with the model benchmark harness (`mlxbench.py modelbench`: real source
 
 End to end (Claude Code through `aituner-claude`, Qwen3.6-35B-A3B Heretic): first reply of a session 6.5 s headless, ~10 s interactive; a follow-up turn 3.7 s. The same setup before this work (unmodified Claude Code, 8B model): 285 s and 190 s. `--strict-mcp-config` matters in interactive mode: without it the user's MCP tools added ~5K tokens (request 7.0K to 1.8K tokens).
 Findings along the way: `--tools` does not add tools back under `--bare`; the subagent's claim that `--system-prompt` does not exist was wrong (it is in `claude --help`); mlx_lm.server answers 404 for any generation failure, which Claude Code reported as "unrecognized model" (the gateway now returns 500 with the real message); Llama 3.1's chat template rejects several tool calls in one assistant message (the gateway sends one call per message).
+
+### 16.10 macOS app (owner request: "a Mac application I can drag into Applications")
+
+`./build_app.sh` builds `dist/aituner.app` and `dist/aituner.dmg` (the app plus an Applications link, for drag-to-install);
+`--install` copies it into `/Applications`. Idempotent: same toolchain preflight as `run_aituner.sh`, clean rebuild each run.
+
+- `Contents/MacOS/aituner` is a Swift/AppKit shell (`macos/App.swift`, built with the Command Line Tools' `swiftc`, no
+  Xcode project); `Contents/MacOS/aituner-server` is the Go binary, run as a child with `--app`. The server prints
+  `link <url>` at start and for every line on its stdin, and **exits when stdin closes**, so it cannot outlive the app
+  (verified: SIGKILL of the app stops the server and macmon at once and frees the port).
+- The web UI shows in a native window (WKWebView). Only the server's own origin loads inside; other http(s) links open in
+  the default browser; report exports go through a save panel. `127.0.0.1` is a secure context in WebKit (checked:
+  clipboard works). ATS allows local networking only.
+- **Menu bar item** (thin gauge symbol) opens a panel with the live model and GPU (`/?view=menubar`, loaded with a fresh
+  single-use link each time it opens and blanked when it closes, so it only polls while visible). Its page can send only
+  `open`, `quit` or its height to the app, and only from the server's origin.
+- **Background mode:** closing the window leaves aituner in the menu bar (activation policy `accessory`, no Dock icon unless
+  pinned); a model being served keeps serving. The Dock icon or the menu bar panel reopens the window. Quit closes the
+  server's stdin and waits for a clean shutdown (model server stopped), then SIGTERM/SIGKILL after 15 s/5 s.
+- Finder launches apps with a minimal PATH; aituner already resolves tools by absolute path, and the app appends Homebrew's
+  directories for anything it starts.
+- Icon: `macos/make_icon.swift` renders `web/public/icon.svg` into the standard 824/1024 rounded square for every iconset
+  size; `iconutil` builds the `.icns`.
+- **Signing:** ad hoc with the hardened runtime. It runs on the Mac that built it (not quarantined). On another Mac,
+  Gatekeeper rejects it (`spctl` says so) until it is signed with a Developer ID and notarized, which needs an Apple
+  Developer account (open decision D2).
+
+### 16.11 Live monitor (owner request: "nvtop/gpustat-like stats; the screen I land on once a model runs")
+
+- `internal/monitor` streams `macmon pipe -i 1000` (sudoless; the same IOReport counters `powermetrics` reads): GPU active
+  %, GPU MHz, CPU %, GPU/CPU/ANE/system watts, RAM and swap, CPU and GPU temperature. Without macmon it falls back to the
+  built-in sampler every 2 s: GPU "Device Utilization %" from `ioreg -c IOAccelerator` (no admin) and memory from
+  `memory_pressure`; the rest shows "no reading", never a guess. macmon is found only at Homebrew/MacPorts paths.
+- Sampling runs only while someone polls (30 s idle stop) or a model is served; history is an in-memory ring of 600
+  samples (live telemetry is not persisted).
+- API: `GET /api/v1/monitor?since=<seq>[&tools=1]` (new samples, model state and RSS, terminal monitors);
+  `POST /api/v1/monitor/tool {id, action: install|open, confirm}` (install is a Homebrew job after confirmation; open runs
+  it in a new Terminal window via a `.command` file). `GET /api/v1/health` returns one live health sample (shared for 2 s).
+- Terminal monitors offered: macmon, mactop (both sudoless per their READMEs), nvtop (its README calls Apple support
+  limited; labelled so). Not offered: gpustat (NVIDIA only, NVML) and asitop (needs sudo for `powermetrics`).
+- UI: **Monitor** tab (model card, meters, 5-minute charts for GPU %, GPU/CPU watts on one axis, memory, then the terminal
+  monitors). Starting a model from Setup switches to Monitor once it is serving. Polling pauses while the page is hidden.
+- Not yet measured: live tokens per second of real requests (the gateway does not record throughput yet).
