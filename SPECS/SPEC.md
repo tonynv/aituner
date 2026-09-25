@@ -270,6 +270,78 @@ are reported honestly in `TASKS.md`.
 - **Fuzzing:** Go native fuzz targets for the command builder, name matchers, estimator, thermal/load parsers, system_profiler
   parser and the admin-script allow-list (fuzzing found and fixed an estimator returning negative speed for invalid input).
 
+## 16. Phase 2: reporting, pinned stats, serve a model, connect your editor
+
+Status: **design**, implemented in the order below; each part is marked done in TASKS.md when verified. Everything
+here follows the same rules: real measurements, nothing simulated, additive and reversible, never touching the user's own
+dotfiles (`~/.vimrc` and `~/.tmux.conf` on the reference machine are symlinks into a git-tracked dotfiles repo).
+
+### 16.1 Benchmark reporting and pinned stats
+
+- **Richer suites** (all real, all with trials): prompt-length sweep for prefill (256 / 1024 / 4096 tokens), generation speed at
+  two context depths (512 / 4096 tokens) so the cost of long context is visible, time-to-first-token derived from prefill,
+  and a **sustained GPU run** (about 20 s of continuous matmul) reporting first-third vs last-third throughput to expose
+  thermal throttling directly instead of inferring it from `pmset`.
+- **Derived insight, not just numbers**: bandwidth utilisation (measured GPU GB/s vs canirun.ai's reference for the chip),
+  and the **roofline** for LLM decoding, `bandwidth / model bytes`, with the measured tok/s shown as a percentage of it.
+  Every derived figure states its formula and inputs.
+- **Report tab** (available from the first completed benchmark): hardware and software versions, health warnings, every metric
+  with all trials drawn as a strip/bar chart (SVG, both themes), before/after comparison with the noise band, tuning changes
+  applied, run history with side-by-side comparison of any two runs, and **export** as JSON, Markdown and CSV
+  (`GET /api/v1/report?run=<id>&format=json|md|csv`, authenticated, same-origin).
+- **Pinned stats bar** on every tab: a sticky strip with the headline numbers (GPU fp16 TFLOPS, GPU bandwidth, MLX generation
+  and prompt tok/s, Ollama generation tok/s, memory budget) and, once a re-run exists, the delta vs baseline; plus a health
+  chip (thermal / power / load) and, while serving, the live model's status. Collapsible on phones; data comes from the run
+  the user is viewing, never invented.
+
+### 16.2 Serving a downloaded model
+
+- **MLX for Mac**: the runtime tab shows the installed `mlx` / `mlx-lm` versions and an **Install / update MLX** action that
+  runs the same idempotent installer used for benchmarking (`pip install --upgrade` into the aituner venv), with live log.
+- **Model server** (`internal/serve`): starts `mlx_lm.server` on a loopback port for a *downloaded* model folder, supervised by
+  aituner (start / stop / restart, health probe on `/health`, ring-buffered logs, memory shown). Flags exposed: max tokens,
+  KV-cache quantisation (`--kv-bits`, `--kv-group-size`, `--quantized-kv-start`), prompt-cache size. `--trust-remote-code` is never
+  passed. Verified in the installed mlx-lm: `mlx_lm.server` serves `/v1/chat/completions`, `/v1/completions`, `/v1/models`,
+  `/health`, supports `tools` -> `tool_calls` through the tokenizer's tool parser, streaming, and `stream_options.include_usage`.
+  It has **no authentication**, so it is bound to an internal loopback port and never exposed directly.
+- **Gateway** (`internal/gateway`): the only listener editors talk to, `127.0.0.1` only, requires an API key (random,
+  generated once, stored `0600` in the data dir, sent as `Authorization: Bearer` or `x-api-key`):
+  - OpenAI-compatible: `/v1/chat/completions`, `/v1/completions`, `/v1/models` reverse-proxied to the model server (works with
+    Continue, vim-ai, CodeCompanion, curl, anything OpenAI-compatible).
+  - Anthropic Messages: `/v1/messages` (streaming and not) and `/v1/messages/count_tokens`, translated to and from the OpenAI
+    format (system prompt, text / image / tool_use / tool_result blocks, tools and tool_choice, stop sequences, usage, the
+    Anthropic SSE event sequence). Required by Claude Code, which sends only Anthropic format
+    (`ANTHROPIC_BASE_URL` + `ANTHROPIC_AUTH_TOKEN`, per code.claude.com/docs llm-gateway-connect / llm-gateway-protocol **[VERIFIED]**).
+  - **Caveat shown in the UI**: Anthropic states it does not support routing Claude Code to non-Claude models through any gateway
+    **[VERIFIED in the official docs]**. It works technically; quality and tool-use reliability depend on the local model.
+- Serving and benchmarking are mutually exclusive (a loaded model would distort measurements), as are downloads and benchmarks.
+
+### 16.3 Connect an editor ("Set up" installs and configures it)
+
+A **Run** tab unlocks once at least one model is downloaded. Each integration shows a plan (what will be installed, which files
+are written, what is *not* touched), asks for one confirmation, runs as a job with live log, then **verifies** itself and reports
+the result. Everything is additive: isolated config directories, marker-guarded files, never overwriting a file aituner did not
+create, fully removable ("Remove" button). Installs use the tool's official method (Homebrew formula/cask, or the vendor's
+documented installer) after the plan names the exact command.
+
+| Integration | Install (only if missing) | Configuration (isolated) | Verification |
+|---|---|---|---|
+| **Claude Code** | already present here; else `brew install --cask claude-code` (official) | launcher `~/.local/bin/aituner-claude` (marker-guarded) exporting `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_MODEL` and the `ANTHROPIC_DEFAULT_*_MODEL` aliases, then `exec claude`; **`~/.claude/settings.json` is not modified**, so normal `claude` is unaffected | `claude --version`; a real `claude -p` round-trip through the gateway |
+| **VS Code** | `code` CLI present; else cask `visual-studio-code` | an **isolated profile** (`--user-data-dir`, `--extensions-dir` under `~/.config/aituner/vscode`, `CONTINUE_GLOBAL_DIR` **[VERIFIED in Continue's source]**): extension **Continue** (`Continue.continue`) with a local OpenAI-compatible model, and the **Claude Code** extension with `claudeCode.environmentVariables`; launcher `aituner-code` | `code --list-extensions --extensions-dir ...`; config files parse |
+| **Neovim** | `brew install neovim` | `NVIM_APPNAME=aituner-nvim` config with lazy.nvim + **CodeCompanion** (`openai_compatible` adapter, `interactions.chat/inline`) **[VERIFIED against the plugin's docs]**; launcher `aituner-nvim`; the user's `~/.config/nvim` is untouched | headless plugin sync, `:checkhealth`-style load, a real chat request through the adapter |
+| **Vim + tmux** | `brew install vim` (system Vim is `-python3` **[VERIFIED]**; `vim-ai` needs python3) and `tmux` if missing | vim-ai cloned into an isolated pack dir; isolated vimrc that **sources the user's own vimrc read-only** then sets `endpoint_url` per command **[VERIFIED against vim-ai's README]**; `aituner-tmux` opens a session: Vim (main), server log, and a small chat pane | `vim -es` loads the plugin with python3; a real completion round-trip |
+| **Any OpenAI-compatible tool** | none | shows base URL, key, model id, curl example | a real `curl` through the gateway |
+
+"Open" starts the tool for a chosen project folder (Terminal.app for terminal tools, `code` for VS Code). The API key is shown
+only in the local UI and written only to `0600` files under aituner's config dir.
+
+### 16.4 Security additions
+
+Gateway and model server bind loopback only; key required on every gateway request (constant-time compare); model server is not
+reachable except through the gateway; setup jobs run only fixed, allow-listed commands (argv, no shell) with values from aituner's
+own state (paths validated by `modeldir`, model ids by `ValidRepo`); launcher scripts are generated from constants plus quoted
+paths and never overwrite foreign files; every setup action is audit-logged; removal restores the previous state exactly.
+
 ## 15. Measured on the reference machine, and known gaps
 
 Measured end to end through the real UI (Mac Studio M1 Max 32 GB, macOS 26.5.1, mlx 0.32.2, mlx-lm 0.31.3, Ollama 0.34.3):

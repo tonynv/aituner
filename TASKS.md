@@ -20,6 +20,15 @@ Legend: [x] done, [~] partial, [ ] not done. Build order: DataStore -> API -> UI
 - [x] T12 KV-cache meter (per-layer-type KV from real configs), list/grid views, configurable models folder, verified resumable downloads, audit log, New-run confirmation
 - [ ] T11 Linux implementation (out of scope for now; `platform` returns ErrUnsupported)
 
+## Phase 2 (SPEC section 16), in order
+- [ ] P1 Richer benchmark suites (prompt sweep, context depth, TTFT, sustained/throttle) + derived roofline/utilisation
+- [ ] P2 Report tab (charts, history, compare, export JSON/MD/CSV) + pinned stats bar on every tab
+- [ ] P3 Model server manager (mlx_lm.server) + MLX install/update action
+- [ ] P4 Gateway: API key, OpenAI proxy, Anthropic Messages translation (streaming + tools) with real-model tests
+- [ ] P5 Run tab UI (runtime, start/stop, endpoint details, logs)
+- [ ] P6 Claude Code setup   - [ ] P7 VS Code setup   - [ ] P8 Neovim setup   - [ ] P9 Vim + tmux setup   - [ ] P10 generic endpoint
+- [ ] P11 Review gates (code, security, UI/UX, QA) on the new surfaces; docs
+
 ## Needs the owner
 - D1: SQLite has no RLS (app-level tenant scoping + isolation test). Accept, or switch to local PostgreSQL?
 - Approve the macOS admin dialog once to exercise the wired-limit apply (the only path not run end to end)
