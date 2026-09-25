@@ -7,26 +7,29 @@
   import Warnings from '../lib/Warnings.svelte';
   import { api, reportUrl } from '../lib/api.js';
   import { fmtNum, fmtBytes } from '../lib/format.js';
+  import { app } from '../lib/app.svelte.js';
 
   let runs = $state([]);
   let runId = $state('');
   let rep = $state(null);
   let err = $state('');
   let loading = $state(false);
+  let empty = $state(false); // nothing has been measured on this Mac yet
   let view = $state('chart'); // chart | table
   let stageView = $state('');
   let cmpWith = $state('');
   let cmp = $state(null);
 
   async function load(id) {
-    loading = true; err = ''; cmp = null; cmpWith = '';
+    loading = true; err = ''; empty = false; cmp = null; cmpWith = '';
     try {
       rep = await api.report(id);
       runId = rep.run.id;
       stageView = rep.stages.tuned ? 'tuned' : 'baseline';
-    } catch (e) { rep = null; err = e.message; } finally { loading = false; }
+    } catch (e) { rep = null; if (e.kind === 'no_results') empty = true; else err = e.message; } finally { loading = false; }
   }
-  $effect(() => { api.runs().then((r) => (runs = r.runs)).catch(() => {}); load(''); });
+  // only runs that measured something: every launch starts a run, most have no results
+  $effect(() => { api.runs().then((r) => (runs = r.runs.filter((x) => x.stage))).catch(() => {}); load(''); });
 
   const stage = $derived(rep?.stages?.[stageView]);
   const hw = $derived(rep?.hardware ?? {});
@@ -70,6 +73,13 @@
 
   {#if loading}<p class="muted">Building report</p>{/if}
   {#if err}<p class="bad" role="alert"><Icon name="alert" size={16} /> {err}</p>{/if}
+  {#if empty}
+    <div class="card stack">
+      <h3>No benchmark results yet</h3>
+      <p class="muted">Nothing has been measured on this Mac. Start a benchmark from Hardware (about 2 minutes) and this report fills in.</p>
+      <div><button class="btn small primary" onclick={() => (app.tab = 'hardware')}><Icon name="gauge" size={14} /> Benchmark this Mac</button></div>
+    </div>
+  {/if}
 
   {#if rep && stage}
     <div class="row meta">

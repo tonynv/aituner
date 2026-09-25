@@ -652,6 +652,14 @@ func TestReportHistoryCompareAndExports(t *testing.T) {
 		t.Fatalf("csv: %d %s", r.StatusCode, b)
 	}
 
+	// a fresh launch starts an empty run: the default report is still the newest run with results, not an error
+	if err := e.s.ensureRun(ctx, true); err != nil {
+		t.Fatal(err)
+	}
+	if def := e.json(t, "GET", "/api/v1/report", "", 200); def["run"].(map[string]any)["id"] != r2.ID {
+		t.Fatalf("default report must be the newest measured run %s: %v", r2.ID, def["run"])
+	}
+
 	cmp := e.json(t, "GET", "/api/v1/compare?a="+r1.ID+"&b="+r2.ID, "", 200)
 	rows := cmp["rows"].([]any)
 	var gen map[string]any

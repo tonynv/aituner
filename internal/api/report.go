@@ -83,10 +83,14 @@ func (s *Server) reportInputs(ctx context.Context, hw *platform.Hardware) report
 	return in
 }
 
-// runOrLatest resolves the ?run= parameter (default: the latest run), validating its shape first.
+// runOrLatest resolves the ?run= parameter, validating its shape first. The default is the newest run with results:
+// every launch starts a fresh run, so "the latest run" alone is usually empty.
 func (s *Server) runOrLatest(w http.ResponseWriter, r *http.Request, param string) (store.Run, bool) {
 	id := r.URL.Query().Get(param)
 	if id == "" {
+		if run, ok := s.latestMeasuredRun(r.Context()); ok {
+			return run, true
+		}
 		run, err := s.tn.LatestRun(r.Context())
 		if err != nil {
 			writeErr(w, http.StatusNotFound, "no_run", "there is no run yet")
@@ -104,6 +108,20 @@ func (s *Server) runOrLatest(w http.ResponseWriter, r *http.Request, param strin
 		return store.Run{}, false
 	}
 	return run, true
+}
+
+// latestMeasuredRun returns the newest run that has benchmark results.
+func (s *Server) latestMeasuredRun(ctx context.Context) (store.Run, bool) {
+	runs, err := s.tn.ListRuns(ctx, 500)
+	if err != nil {
+		return store.Run{}, false
+	}
+	for _, r := range runs {
+		if rs, err := s.tn.Results(ctx, r.ID); err == nil && len(rs) > 0 {
+			return r, true
+		}
+	}
+	return store.Run{}, false
 }
 
 func (s *Server) buildReport(ctx context.Context, run store.Run) (report.Report, error) {
@@ -136,7 +154,7 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(rep.Stages) == 0 {
-		writeErr(w, http.StatusConflict, "no_results", "this run has no benchmark results yet")
+		writeErr(w, http.StatusConflict, "no_results", "No benchmark has been run on this Mac yet. Run one from Benchmark.")
 		return
 	}
 	name := "aituner-report-" + run.ID[:8]
