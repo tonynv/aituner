@@ -62,7 +62,7 @@ func (m *Monitor) isRunning() bool { m.mu.Lock(); defer m.mu.Unlock(); return m.
 
 func TestStreamsMacmonStopsWhenIdleAndRestarts(t *testing.T) {
 	bin := fakeMacmon(t)
-	m := New(1, nil)
+	m := New(func() int64 { return 1 }, nil)
 	m.macmon = func() (string, bool) { return bin, true }
 	m.idleFor = 300 * time.Millisecond
 	ctx, cancel := context.WithCancel(context.Background())
@@ -87,7 +87,7 @@ func TestStreamsMacmonStopsWhenIdleAndRestarts(t *testing.T) {
 func TestKeepHoldsSamplingWithoutWatchers(t *testing.T) {
 	bin := fakeMacmon(t)
 	keep := true
-	m := New(1, func() bool { return keep })
+	m := New(func() int64 { return 1 }, func() bool { return keep })
 	m.macmon = func() (string, bool) { return bin, true }
 	m.idleFor = time.Millisecond
 	ctx, cancel := context.WithCancel(context.Background())
@@ -100,7 +100,7 @@ func TestKeepHoldsSamplingWithoutWatchers(t *testing.T) {
 }
 
 func TestBuiltinFallbackWhenMacmonMissing(t *testing.T) {
-	m := New(32<<30, nil)
+	m := New(func() int64 { return 32 << 30 }, nil)
 	m.macmon = func() (string, bool) { return "", false }
 	m.health = func(context.Context) platform.Health { return platform.Health{GPUBusyPct: 40, FreeMemPct: 75} }
 	ctx, cancel := context.WithCancel(context.Background())
@@ -118,7 +118,7 @@ func TestRealMacmonLive(t *testing.T) {
 	if _, ok := FindMacmon(); !ok {
 		t.Skip("macmon not installed")
 	}
-	m := New(0, nil)
+	m := New(func() int64 { return 0 }, nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	m.Want(ctx)

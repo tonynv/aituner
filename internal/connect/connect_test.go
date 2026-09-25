@@ -576,3 +576,37 @@ func TestWithoutSessionEnvDropsOnlyClaudeCodeSessionState(t *testing.T) {
 		t.Fatalf("%s", got)
 	}
 }
+
+func TestTerminalMonitorsInstallAndOpen(t *testing.T) {
+	home := t.TempDir()
+	r := &recorder{have: map[string]string{"brew": "/opt/homebrew/bin/brew", "open": "/usr/bin/open"}}
+	env := Env{Home: home, ConfigDir: filepath.Join(home, ".config", "aituner"), Run: r}
+	r.env = env
+	m := TerminalMonitorByID("mactop")
+	if m == nil || TerminalMonitorByID("gpustat") != nil || len(TerminalMonitors()) != 3 {
+		t.Fatal("catalog")
+	}
+	if m.Installed(env) {
+		t.Fatal("reported installed")
+	}
+	if err := m.Open(context.Background(), env); err == nil {
+		t.Fatal("opened a monitor that is not installed")
+	}
+	if err := m.Install(context.Background(), env, func(string) {}); err == nil {
+		t.Fatal("install must fail when brew did not provide the command")
+	}
+	if got := r.cmds[len(r.cmds)-1]; got != "brew install mactop" {
+		t.Fatalf("ran %q", got)
+	}
+	r.have["mactop"] = "/opt/homebrew/bin/mactop"
+	if err := m.Open(context.Background(), env); err != nil {
+		t.Fatal(err)
+	}
+	script, err := os.ReadFile(filepath.Join(env.ConfigDir, "launch", "monitor-mactop.command"))
+	if err != nil || !strings.Contains(string(script), "exec '/opt/homebrew/bin/mactop'") {
+		t.Fatalf("%v %s", err, script)
+	}
+	if got := r.cmds[len(r.cmds)-1]; !strings.HasPrefix(got, "open -a Terminal ") {
+		t.Fatalf("ran %q", got)
+	}
+}

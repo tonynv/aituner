@@ -91,8 +91,8 @@ func clampPct(v float64) float64 { return min(max(v, 0), 100) }
 
 // Monitor keeps the live history. The zero value is not usable; call New.
 type Monitor struct {
-	ramTotal int64       // for the built-in fallback, which only knows the free percentage
-	keep     func() bool // keep sampling without watchers (a model is being served)
+	ramTotal func() int64 // for the built-in fallback, which only knows the free percentage
+	keep     func() bool  // keep sampling without watchers (a model is being served)
 	macmon   func() (string, bool)
 	health   func(context.Context) platform.Health
 	idleFor  time.Duration // stop sampling this long after the last watcher, unless keep() is true
@@ -105,8 +105,8 @@ type Monitor struct {
 	lastWant time.Time
 }
 
-// New returns a monitor. ramTotal is the machine's memory in bytes; keep may be nil.
-func New(ramTotal int64, keep func() bool) *Monitor {
+// New returns a monitor. ramTotal reports the machine's memory in bytes (0 while unknown); keep may be nil.
+func New(ramTotal func() int64, keep func() bool) *Monitor {
 	if keep == nil {
 		keep = func() bool { return false }
 	}
@@ -224,12 +224,12 @@ func (m *Monitor) builtin(ctx context.Context, d time.Duration) bool {
 	defer t.Stop()
 	for time.Now().Before(end) {
 		h := m.health(ctx)
-		s := Sample{GPUPct: -1, CPUPct: -1, GPUTempC: -1, CPUTempC: -1, RAMTotal: m.ramTotal}
+		s := Sample{GPUPct: -1, CPUPct: -1, GPUTempC: -1, CPUTempC: -1, RAMTotal: m.ramTotal()}
 		if h.GPUBusyPct >= 0 {
 			s.GPUPct = float64(h.GPUBusyPct)
 		}
-		if h.FreeMemPct >= 0 && m.ramTotal > 0 {
-			s.RAMUsed = m.ramTotal * int64(100-h.FreeMemPct) / 100
+		if h.FreeMemPct >= 0 && s.RAMTotal > 0 {
+			s.RAMUsed = s.RAMTotal * int64(100-h.FreeMemPct) / 100
 		}
 		m.add(s, SourceBuiltin)
 		if m.idle() {
