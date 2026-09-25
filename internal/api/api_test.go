@@ -520,6 +520,25 @@ func TestServicesAndBootstrapPlan(t *testing.T) {
 	}
 }
 
+func TestMachineImageIsThisMacsOwnPicture(t *testing.T) {
+	e := newEnv(t)
+	r, b := e.do(t, "GET", "/api/v1/machine/image", "", e.authed(nil))
+	if r.StatusCode != 200 || r.Header.Get("Content-Type") != "image/png" || len(b) < 1000 || string(b[1:4]) != "PNG" {
+		t.Fatalf("%d %s %d bytes", r.StatusCode, r.Header.Get("Content-Type"), len(b))
+	}
+	// cached: the second request serves the same file without converting again
+	fi, err := os.Stat(filepath.Join(e.s.cfg.DataDir, "device-"+e.s.hardware().Model.Identifier+".png"))
+	if err != nil || fi.Mode().Perm() != 0o600 {
+		t.Fatalf("cache: %v %v", err, fi)
+	}
+	if r2, b2 := e.do(t, "GET", "/api/v1/machine/image", "", e.authed(nil)); r2.StatusCode != 200 || len(b2) != len(b) {
+		t.Fatal("cached image differs")
+	}
+	if r, _ := e.do(t, "GET", "/api/v1/machine/image", "", nil); r.StatusCode != 401 {
+		t.Fatalf("unauthenticated: %d", r.StatusCode)
+	}
+}
+
 func TestPhaseGates(t *testing.T) {
 	e := newEnv(t)
 	for _, c := range []struct{ m, p string }{{"GET", "/api/v1/tune/plan"}, {"POST", "/api/v1/tune/apply"}} {

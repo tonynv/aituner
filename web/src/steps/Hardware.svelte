@@ -1,5 +1,6 @@
 <script>
   import Icon from '../lib/Icon.svelte';
+  import MachinePic from '../lib/MachinePic.svelte';
   import { fmtBytes } from '../lib/format.js';
   import { app, act } from '../lib/app.svelte.js';
   import { api } from '../lib/api.js';
@@ -23,9 +24,13 @@
 </script>
 
 <div class="stack">
-  <div>
-    <h2>This machine</h2>
-    <p class="muted">{detecting ? 'Detecting the hardware…' : 'Detected directly from the hardware, fresh on every launch.'}</p>
+  <div class="hero">
+    {#if !detecting && hw}<MachinePic size={96} name={hw.model.name} />{/if}
+    <div>
+      <h2>{!detecting && hw ? hw.model.name : 'This machine'}</h2>
+      {#if !detecting && hw}<p class="chip">{hw.cpu.chip} · {hw.cpu.cores}-core CPU · {hw.gpu.cores}-core GPU · {Math.round(hw.memory.total_bytes / 1024 ** 3)} GB</p>{/if}
+      <p class="muted">{detecting ? 'Detecting the hardware…' : 'Detected directly from the hardware, fresh on every launch.'}</p>
+    </div>
   </div>
 
   {#if !detecting}
@@ -127,6 +132,8 @@
 </dialog>
 
 <style>
+  .hero { display: flex; align-items: center; gap: 20px; }
+  .chip { font-weight: 500; margin: 2px 0; }
   .head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; color: var(--muted); }
   .head h3 { color: var(--text); }
   .cta { display: flex; justify-content: space-between; gap: 16px; align-items: center; flex-wrap: wrap; }

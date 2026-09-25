@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -97,5 +98,26 @@ func TestDetectProbesNeverLeakIdentifiers(t *testing.T) {
 		if v, _ := doc.SP[0][k].(string); v != "" && strings.Contains(sb.String(), v) {
 			t.Fatalf("probe output contains %s", k)
 		}
+	}
+}
+
+// Live: macOS's own device table maps this Mac and known models to their pictures, and unknown codes to nothing.
+func TestDeviceIconFromCoreTypes(t *testing.T) {
+	ctx := context.Background()
+	if p, ok := DeviceIcon(ctx, "Mac13,1"); !ok || filepath.Base(p) != "com.apple.macstudio.icns" {
+		t.Fatalf("Mac Studio: %q %v", p, ok)
+	}
+	if p, ok := DeviceIcon(ctx, "MacPro7,1"); !ok || !strings.Contains(p, "macpro") {
+		t.Fatalf("colour-variant codes: %q %v", p, ok)
+	}
+	if _, ok := DeviceIcon(ctx, "NotAMac99,9"); ok {
+		t.Fatal("unknown identifier matched")
+	}
+	h, err := Current().Detect(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := DeviceIcon(ctx, h.Model.Identifier); !ok {
+		t.Fatalf("no picture for this Mac (%s)", h.Model.Identifier)
 	}
 }

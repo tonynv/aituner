@@ -1,5 +1,6 @@
 <script>
   import Icon from './Icon.svelte';
+  import MachinePic from './MachinePic.svelte';
   import LogPanel from './LogPanel.svelte';
   import Progress from './Progress.svelte';
   import { api } from './api.js';
@@ -17,7 +18,7 @@
 
 <section class="card stack tight" aria-label="MLX for Mac">
   <div class="row between">
-    <div class="row"><Icon name="cpu" /><h3>MLX for Mac</h3></div>
+    <div class="row"><MachinePic size={40} name={st.hardware?.model?.name} /><h3>MLX for Mac</h3></div>
     {#if rt?.ready}<span class="badge ok"><Icon name="check" size={12} /> installed</span>{:else}<span class="badge warn">not installed</span>{/if}
   </div>
   {#if rt?.ready}
