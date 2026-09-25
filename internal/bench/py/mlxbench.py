@@ -257,11 +257,16 @@ def modelbench(args):
             trials = args.trials if n <= 4096 else 1  # long prompts are slow and stable
             log(f"{n} tokens of context, {'fp16' if not kv_bits else str(kv_bits) + '-bit'} KV cache")
             pp, tg, peak = [], [], 0.0
-            for t in range(trials):
-                r = run(n, kv_bits, t, args.gen_tokens)
-                pp.append(r.prompt_tps)
-                tg.append(r.generation_tps)
-                peak = max(peak, r.peak_memory)
+            try:
+                for t in range(trials):
+                    r = run(n, kv_bits, t, args.gen_tokens)
+                    pp.append(r.prompt_tps)
+                    tg.append(r.generation_tps)
+                    peak = max(peak, r.peak_memory)
+            except NotImplementedError as e:
+                # e.g. sliding-window attention caches cannot be quantised: skip this cell, keep the rest
+                log(f"{'fp16' if not kv_bits else str(kv_bits) + '-bit'} KV cache is not supported by this model ({e}); skipped")
+                break
             emit(event="result", suite="modelbench", model=args.model, kv_bits=kv_bits, prompt_tokens=n,
                  prefill_tps=pp, decode_tps=tg, peak_gb=peak)
 

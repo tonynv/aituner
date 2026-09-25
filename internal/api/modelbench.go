@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/tonynv/aituner/internal/bench"
@@ -85,7 +86,7 @@ func (s *Server) handleModelBenchStart(w http.ResponseWriter, r *http.Request) {
 			}
 			res.Repo, res.SizeGB, res.At = m.Repo, m.SizeGB, time.Now().UnixMilli()
 			if err != nil {
-				res.Error = err.Error()
+				res.Error = lastLine(err.Error())
 				emit(bench.Event{Level: "warn", Suite: "modelbench", Message: m.Repo + ": " + err.Error()})
 			}
 			b, _ := json.Marshal(res)
@@ -119,4 +120,14 @@ func (s *Server) handleModelBenchList(w http.ResponseWriter, r *http.Request) {
 		items = append(items, it)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+// lastLine is the final non-empty line of an error: for a Python failure that is the exception, not the traceback.
+func lastLine(s string) string {
+	lines := strings.Split(strings.TrimSpace(s), "\n")
+	l := strings.TrimSpace(lines[len(lines)-1])
+	if len(l) > 300 {
+		l = l[:300] + "…"
+	}
+	return l
 }

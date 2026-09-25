@@ -5,6 +5,7 @@
   import { api } from './api.js';
   import { app } from './app.svelte.js';
   import { fmtNum } from './format.js';
+  import { fastestRepo, recommendedRepo, INTERACTIVE_TPS } from './pick.js';
 
   // Measured speed of every downloaded model on this machine, with real code prompts. Prefill is how fast a prompt is
   // read (this sets the wait before the first word); decode is how fast the answer is written.
@@ -37,7 +38,8 @@
   }).sort((a, b) => (b.p4?.decode_tps ?? 0) - (a.p4?.decode_tps ?? 0)));
   const failed = $derived(items.filter((i) => i.result?.error));
   const pending = $derived(items.filter((i) => !i.result));
-  const best = $derived(rows[0]?.repo);
+  const fastest = $derived(fastestRepo(items));
+  const suggested = $derived(recommendedRepo(items));
 </script>
 
 <section class="card stack tight" aria-label="Model speed">
@@ -62,12 +64,12 @@
     <div class="scroll-x">
       <table>
         <thead>
-          <tr><th>Model</th><th class="num">Size</th><th class="num">Read prompt</th><th class="num">Write, 4K ctx</th><th class="num">Write, 16K ctx</th><th class="num">Peak memory</th><th class="num">Claude Code turn (lean)</th><th class="num">(full 27K)</th></tr>
+          <tr><th>Model</th><th class="num">Size</th><th class="num">Prompt speed</th><th class="num">Reply speed, 4K ctx</th><th class="num">Reply speed, 16K ctx</th><th class="num">Peak memory</th><th class="num">Claude Code turn (lean)</th><th class="num">(full 27K)</th></tr>
         </thead>
         <tbody>
           {#each rows as r (r.repo)}
             <tr>
-              <td class="mono name">{r.repo.split('/').pop()}{#if r.repo === best && rows.length > 1} <span class="badge ok">fastest</span>{/if}</td>
+              <td class="mono name">{r.repo.split('/').pop()}{#if r.repo === suggested} <span class="badge ok">recommended</span>{:else if r.repo === fastest && rows.length > 1} <span class="badge">fastest</span>{/if}</td>
               <td class="num">{fmtNum(r.size)} GB</td>
               <td class="num">{r.p4 ? fmtNum(r.p4.prefill_tps) : 'n/a'} tok/s</td>
               <td class="num">{r.p4 ? fmtNum(r.p4.decode_tps) : 'n/a'} tok/s</td>
@@ -80,7 +82,7 @@
         </tbody>
       </table>
     </div>
-    <p class="faint small">Measured with real source code as the prompt, median of repeated runs. "Claude Code turn" is the wait before the first word of a cold request: about 1.8K tokens through <span class="mono">aituner-claude</span> (lean mode), or 27.7K for an unmodified Claude Code setup. Repeat turns reuse the cached prompt and are much faster.
+    <p class="faint small">Measured with real source code as the prompt, median of repeated runs. Prompt speed is how fast the model reads; reply speed is how fast it writes. Recommended = the largest model that still replies at {INTERACTIVE_TPS}+ tokens/s (a bigger model writes better code; the fastest is often too small). "Claude Code turn" is the wait before the first word of a cold request: about 1.8K tokens through <span class="mono">aituner-claude</span> (lean mode), or 27.7K for an unmodified Claude Code setup. Repeat turns reuse the cached prompt and are much faster.
       {#if rows.some((r) => r.k16)} An 8-bit KV cache used more memory and was slower in every test here, so aituner leaves it off.{/if}</p>
   {/if}
 </section>
