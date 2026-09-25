@@ -14,6 +14,7 @@ import (
 	"github.com/tonynv/aituner/internal/canirun"
 	"github.com/tonynv/aituner/internal/platform"
 	"github.com/tonynv/aituner/internal/reco"
+	"github.com/tonynv/aituner/internal/report"
 	"github.com/tonynv/aituner/internal/store"
 	"github.com/tonynv/aituner/internal/tune"
 )
@@ -35,39 +36,26 @@ type benchMeta struct {
 }
 
 type StateResp struct {
-	Supported bool                `json:"supported"`
-	Platform  string              `json:"platform"`
-	Message   string              `json:"message,omitempty"`
-	Phase     string              `json:"phase"`
-	Run       *store.Run          `json:"run,omitempty"`
-	Hardware  *platform.Hardware  `json:"hardware,omitempty"`
-	Job       *JobInfo            `json:"job"`
-	Baseline  []bench.Metric      `json:"baseline"`
-	Tuned     []bench.Metric      `json:"tuned"`
-	Compare   []bench.Row         `json:"compare"`
-	Skipped   map[string][]string `json:"skipped"`
-	Warnings  map[string][]string `json:"warnings"`
-	Changes   []store.TuneChange  `json:"tune_changes"`
-	BenchPlan BenchPlan           `json:"bench_plan"`
-	Unlocked  bool                `json:"recommendations_unlocked"`
+	Supported bool                       `json:"supported"`
+	Platform  string                     `json:"platform"`
+	Message   string                     `json:"message,omitempty"`
+	Phase     string                     `json:"phase"`
+	Run       *store.Run                 `json:"run,omitempty"`
+	Hardware  *platform.Hardware         `json:"hardware,omitempty"`
+	Job       *JobInfo                   `json:"job"`
+	Baseline  []bench.Metric             `json:"baseline"`
+	Tuned     []bench.Metric             `json:"tuned"`
+	Compare   []bench.Row                `json:"compare"`
+	Skipped   map[string][]string        `json:"skipped"`
+	Warnings  map[string][]string        `json:"warnings"`
+	Changes   []store.TuneChange         `json:"tune_changes"`
+	BenchPlan BenchPlan                  `json:"bench_plan"`
+	Unlocked  bool                       `json:"recommendations_unlocked"`
+	Headline  map[string]report.Headline `json:"headline"`
+	BudgetGB  float64                    `json:"budget_gb"`
 }
 
-func toMetrics(rs []store.Result, stage string) []bench.Metric {
-	out := []bench.Metric{}
-	for _, r := range rs {
-		if r.Stage != stage {
-			continue
-		}
-		m := bench.Metric{Suite: r.Suite, Engine: r.Engine, Name: r.Metric, Unit: r.Unit, Value: r.Value}
-		_ = json.Unmarshal(r.Trials, &m.Trials)
-		var v map[string]string
-		if json.Unmarshal(r.Versions, &v) == nil {
-			m.Versions = v
-		}
-		out = append(out, m)
-	}
-	return out
-}
+func toMetrics(rs []store.Result, stage string) []bench.Metric { return report.MetricsFrom(rs, stage) }
 
 func (s *Server) runOr501(w http.ResponseWriter, r *http.Request) (store.Run, bool) {
 	if s.hardware() == nil {
@@ -171,6 +159,14 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	}
 	resp.BenchPlan = s.benchPlan(hw, run.Phase)
 	resp.Unlocked = run.Phase == store.PhaseTunedDone
+	resp.Headline = map[string]report.Headline{}
+	if len(resp.Baseline) > 0 {
+		resp.Headline["baseline"] = report.HeadlineOf(resp.Baseline)
+	}
+	if len(resp.Tuned) > 0 {
+		resp.Headline["tuned"] = report.HeadlineOf(resp.Tuned)
+	}
+	resp.BudgetGB = s.budgetGB(r.Context(), run.ID, hw)
 	writeJSON(w, http.StatusOK, resp)
 }
 

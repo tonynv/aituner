@@ -2,7 +2,10 @@
 // MLX in the aituner venv, and LLM inference through a running Ollama. Nothing here is simulated.
 package bench
 
-import "sort"
+import (
+	"sort"
+	"strings"
+)
 
 // Metric is one measured quantity with all of its trials.
 type Metric struct {
@@ -14,9 +17,17 @@ type Metric struct {
 	Value    float64           `json:"value"` // median of Trials
 	Versions map[string]string `json:"versions,omitempty"`
 	Model    string            `json:"model,omitempty"`
+	Label    string            `json:"label"`
 }
 
-func (m *Metric) Finalize() { m.Value = Median(m.Trials) }
+func (m *Metric) Finalize() {
+	m.Value = Median(m.Trials)
+	m.Label = LabelFor(m.Suite, m.Engine, m.Name)
+}
+
+// IsSeries reports whether the metric's "trials" are a time series (one sample per second), where variation over time is
+// the signal (throttling) rather than measurement noise.
+func (m Metric) IsSeries() bool { return strings.HasPrefix(m.Name, "sustained_") }
 
 func (m Metric) Key() string { return m.Suite + "/" + m.Engine + "/" + m.Name }
 
@@ -76,3 +87,30 @@ func halfRangePct(c []float64) float64 {
 
 // UnstableThresholdPct: beyond this untrimmed spread a measurement is reported as disturbed.
 const UnstableThresholdPct = 15.0
+
+var labels = map[string]string{
+	"memory/cpu/copy_bandwidth":     "CPU memory copy bandwidth",
+	"memory/cpu/read_bandwidth":     "CPU memory read bandwidth",
+	"gpu/mlx/matmul_fp16":           "GPU compute, fp16",
+	"gpu/mlx/matmul_fp32":           "GPU compute, fp32",
+	"gpu/mlx/sustained_matmul_fp16": "GPU compute, sustained (per second)",
+	"gpu/mlx/mem_bandwidth":         "GPU memory bandwidth",
+	"llm/mlx/prompt_tps":            "MLX prompt processing, 512 tokens",
+	"llm/mlx/generation_tps":        "MLX text generation, 512-token context",
+	"llm/mlx/peak_memory":           "MLX peak memory",
+	"llm/mlx/prefill_256_tps":       "MLX prefill, 256-token prompt",
+	"llm/mlx/prefill_1024_tps":      "MLX prefill, 1024-token prompt",
+	"llm/mlx/prefill_4096_tps":      "MLX prefill, 4096-token prompt",
+	"llm/mlx/decode_4096_tps":       "MLX text generation, 4096-token context",
+	"llm/ollama/prompt_tps":         "Ollama prompt processing",
+	"llm/ollama/generation_tps":     "Ollama text generation",
+}
+
+// LabelFor is the human name of a metric; unknown metrics fall back to their key so nothing is ever unlabeled.
+func LabelFor(suite, engine, name string) string {
+	k := suite + "/" + engine + "/" + name
+	if l, ok := labels[k]; ok {
+		return l
+	}
+	return k
+}

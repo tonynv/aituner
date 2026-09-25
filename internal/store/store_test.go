@@ -189,3 +189,24 @@ func TestSettingsAreTenantScopedAndDeletable(t *testing.T) {
 		t.Fatalf("not deleted: %q", v)
 	}
 }
+
+func TestListRunsAndGetMachineAreTenantScoped(t *testing.T) {
+	d := open(t)
+	ctx := context.Background()
+	a, ra := setup(t, d, "a")
+	b, rb := setup(t, d, "b")
+	a2, _ := a.CreateRun(ctx, ra.MachineID)
+	la, _ := a.ListRuns(ctx, 10)
+	if len(la) != 2 || la[0].ID != a2.ID || la[1].ID != ra.ID {
+		t.Fatalf("a's runs (newest first): %+v", la)
+	}
+	if lb, _ := b.ListRuns(ctx, 10); len(lb) != 1 || lb[0].ID != rb.ID {
+		t.Fatalf("b sees only its own: %+v", lb)
+	}
+	if _, err := b.GetMachine(ctx, ra.MachineID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("b read a's machine: %v", err)
+	}
+	if m, err := a.GetMachine(ctx, ra.MachineID); err != nil || len(m.Snapshot) == 0 {
+		t.Fatalf("%+v %v", m, err)
+	}
+}

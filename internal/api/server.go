@@ -45,6 +45,7 @@ type Config struct {
 	HF       *hf.Client
 	Ollama   *bench.Ollama
 	Runner   tune.Runner
+	Version  string
 	Log      func(string)
 }
 
@@ -217,6 +218,9 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("POST /api/v1/tune/apply", s.handleTuneApply)
 	api.HandleFunc("POST /api/v1/tune/revert", s.handleTuneRevert)
 	api.HandleFunc("GET /api/v1/recommendations", s.handleRecommendations)
+	api.HandleFunc("GET /api/v1/runs", s.handleListRuns)
+	api.HandleFunc("GET /api/v1/report", s.handleReport)
+	api.HandleFunc("GET /api/v1/compare", s.handleCompare)
 	api.HandleFunc("GET /api/v1/settings", s.handleGetSettings)
 	api.HandleFunc("PUT /api/v1/settings", s.handlePutSettings)
 	api.HandleFunc("GET /api/v1/downloads", s.handleListDownloads)

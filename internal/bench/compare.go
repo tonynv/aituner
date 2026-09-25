@@ -18,6 +18,7 @@ type Row struct {
 	Engine   string  `json:"engine"`
 	Metric   string  `json:"metric"`
 	Unit     string  `json:"unit"`
+	Label    string  `json:"label"`
 	Before   Stat    `json:"before"`
 	After    Stat    `json:"after"`
 	DeltaPct float64 `json:"delta_pct"`
@@ -32,6 +33,8 @@ func stat(m Metric) Stat {
 
 func isInfo(m Metric) bool { return m.Name == "peak_memory" }
 
+// isSeriesMedian: a sustained series is compared by its median like any metric, but its spread is drift, not noise.
+
 // Compare pairs metrics by key and classifies each change against the measured noise of both runs.
 func Compare(before, after []Metric) []Row {
 	idx := map[string]Metric{}
@@ -44,7 +47,7 @@ func Compare(before, after []Metric) []Row {
 		if !ok || b.Value == 0 {
 			continue
 		}
-		r := Row{Key: b.Key(), Suite: b.Suite, Engine: b.Engine, Metric: b.Name, Unit: b.Unit, Before: stat(b), After: stat(a)}
+		r := Row{Key: b.Key(), Suite: b.Suite, Engine: b.Engine, Metric: b.Name, Label: LabelFor(b.Suite, b.Engine, b.Name), Unit: b.Unit, Before: stat(b), After: stat(a)}
 		r.DeltaPct = (a.Value - b.Value) / b.Value * 100
 		r.NoisePct = math.Max(NoiseFloorPct, math.Max(r.Before.SpreadPct, r.After.SpreadPct))
 		switch {

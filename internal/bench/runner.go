@@ -31,7 +31,7 @@ type Result struct {
 func Run(ctx context.Context, o Options, emit Emit) (Result, error) {
 	var res Result
 	step := 0
-	const total = 7.0
+	const total = 8.0
 	prog := func(msg string) {
 		emit(Event{Level: "info", Message: msg, Progress: float64(step) / total})
 		step++
@@ -99,6 +99,13 @@ func Run(ctx context.Context, o Options, emit Emit) (Result, error) {
 	}
 	res.Metrics = append(res.Metrics, lm...)
 
+	prog("LLM inference: prompt-length sweep and long-context decode (MLX)")
+	sw, err := o.MLX.Sweep(ctx, emit, BenchModelMLX, 3, versions)
+	if err != nil {
+		return res, err
+	}
+	res.Metrics = append(res.Metrics, sw...)
+
 	prog("LLM inference: Ollama")
 	if o.Ollama == nil || !o.Ollama.Running(ctx) {
 		res.Skipped = append(res.Skipped, "ollama: not running")
@@ -109,7 +116,7 @@ func Run(ctx context.Context, o Options, emit Emit) (Result, error) {
 		res.Metrics = append(res.Metrics, om...)
 	}
 	for _, m := range res.Metrics {
-		if u := UnstablePct(m.Trials); u > UnstableThresholdPct && !isInfo(m) {
+		if u := UnstablePct(m.Trials); u > UnstableThresholdPct && !isInfo(m) && !m.IsSeries() {
 			w := fmt.Sprintf("%s varied by ±%.0f%% between trials (something else may have used the machine); the median is reported, but treat this number with care.", m.Key(), u)
 			res.Warnings = append(res.Warnings, w)
 			emit(Event{Level: "warn", Message: w})

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -458,4 +459,118 @@ func TestDownloadsAreGatedAndRestrictedToOfferedRepos(t *testing.T) {
 		t.Fatalf("%v", l)
 	}
 	e.json(t, "POST", "/api/v1/downloads/cancel", `{"repo":"a/b"}`, 200)
+}
+
+// seed puts real stored results on a run, exactly as a finished benchmark would.
+func seed(t *testing.T, e *env, runID, stage string, gen float64) {
+	t.Helper()
+	ctx := context.Background()
+	for _, r := range []store.Result{
+		{Stage: stage, Suite: "llm", Engine: "mlx", Metric: "generation_tps", Value: gen, Unit: "tok/s", Trials: json.RawMessage(fmt.Sprintf("[%v,%v,%v]", gen-1, gen, gen+1))},
+		{Stage: stage, Suite: "gpu", Engine: "mlx", Metric: "mem_bandwidth", Value: 355, Unit: "GB/s", Trials: json.RawMessage("[354,355,356]")},
+		{Stage: stage, Suite: "gpu", Engine: "mlx", Metric: "sustained_matmul_fp16", Value: 7, Unit: "TFLOPS", Trials: json.RawMessage("[7,7,7,7,7,7,7,7,7]")},
+	} {
+		if err := e.s.tn.AddResult(ctx, runID, r); err != nil {
+			t.Fatal(err)
+		}
+	}
+	meta, _ := json.Marshal(benchMeta{Warnings: []string{"seeded warning"}})
+	if err := e.s.tn.CachePut(ctx, "bench_meta", runID+"|"+stage, meta); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestReportHistoryCompareAndExports(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	r1, _ := e.s.tn.LatestRun(ctx)
+	if _, b := e.do(t, "GET", "/api/v1/report", "", e.authed(nil)); !strings.Contains(string(b), "no_results") {
+		t.Fatalf("a run without results must say so: %s", b)
+	}
+	seed(t, e, r1.ID, "baseline", 130)
+	seed(t, e, r1.ID, "tuned", 140)
+	if err := e.s.ensureRun(ctx, true); err != nil { // a second run
+		t.Fatal(err)
+	}
+	r2, _ := e.s.tn.LatestRun(ctx)
+	seed(t, e, r2.ID, "baseline", 120)
+
+	runs := e.json(t, "GET", "/api/v1/runs", "", 200)["runs"].([]any)
+	if len(runs) != 2 || runs[0].(map[string]any)["id"] != r2.ID {
+		t.Fatalf("history newest first: %v", runs)
+	}
+	h := runs[1].(map[string]any)
+	if h["stage"] != "tuned" || h["headline"].(map[string]any)["mlx_generation_tps"].(float64) != 140 || !strings.Contains(h["machine"].(string), ",") {
+		t.Fatalf("summary of the tuned run: %v", h)
+	}
+
+	rep := e.json(t, "GET", "/api/v1/report?run="+r1.ID, "", 200)
+	stages := rep["stages"].(map[string]any)
+	if len(stages) != 2 || len(rep["compare"].([]any)) == 0 {
+		t.Fatalf("report: %v", rep)
+	}
+	base := stages["baseline"].(map[string]any)
+	if w := base["warnings"].([]any); len(w) != 1 || w[0] != "seeded warning" {
+		t.Fatalf("warnings must travel with the report: %v", base["warnings"])
+	}
+	derived := map[string]bool{}
+	for _, d := range base["derived"].([]any) {
+		derived[d.(map[string]any)["key"].(string)] = true
+	}
+	if !derived["sustained_throttle_pct"] {
+		t.Fatalf("derived insight missing: %v", derived)
+	}
+	first := base["metrics"].([]any)[0].(map[string]any)
+	if first["label"] == "" || first["label"] == nil {
+		t.Fatalf("metrics must be labelled by the server: %v", first)
+	}
+
+	r, b := e.do(t, "GET", "/api/v1/report?run="+r1.ID+"&format=md&download=1", "", e.authed(nil))
+	if r.StatusCode != 200 || !strings.HasPrefix(r.Header.Get("Content-Type"), "text/markdown") || !strings.Contains(r.Header.Get("Content-Disposition"), "aituner-report-"+r1.ID[:8]+".md") || !strings.Contains(string(b), "## Before and after") {
+		t.Fatalf("markdown: %d %v\n%s", r.StatusCode, r.Header, b)
+	}
+	r, b = e.do(t, "GET", "/api/v1/report?run="+r1.ID+"&format=csv", "", e.authed(nil))
+	if r.StatusCode != 200 || !strings.HasPrefix(string(b), "stage,suite,engine,metric") || strings.Contains(r.Header.Get("Content-Disposition"), "attachment") {
+		t.Fatalf("csv: %d %s", r.StatusCode, b)
+	}
+
+	cmp := e.json(t, "GET", "/api/v1/compare?a="+r1.ID+"&b="+r2.ID, "", 200)
+	rows := cmp["rows"].([]any)
+	var gen map[string]any
+	for _, x := range rows {
+		if x.(map[string]any)["metric"] == "generation_tps" {
+			gen = x.(map[string]any)
+		}
+	}
+	if cmp["a_stage"] != "tuned" || cmp["b_stage"] != "baseline" || gen == nil || gen["verdict"] != "slower" || gen["label"] == "" {
+		t.Fatalf("compare (tuned 140 -> baseline 120 must read slower): %v", cmp)
+	}
+}
+
+func TestReportEndpointsRejectBadInput(t *testing.T) {
+	e := newEnv(t)
+	for _, q := range []string{"/api/v1/report?run=../../etc", "/api/v1/report?run=zzzz", "/api/v1/report?run=' OR 1=1--", "/api/v1/compare?a=nothex&b=nothex", "/api/v1/compare?a=" + strings.Repeat("a", 32)} {
+		if r, b := e.do(t, "GET", q, "", e.authed(nil)); r.StatusCode != 400 && r.StatusCode != 404 {
+			t.Errorf("%s -> %d %s", q, r.StatusCode, b)
+		}
+	}
+	ctx := context.Background()
+	run, _ := e.s.tn.LatestRun(ctx)
+	seed(t, e, run.ID, "baseline", 100)
+	if r, _ := e.do(t, "GET", "/api/v1/report?run="+run.ID+"&format=exe", "", e.authed(nil)); r.StatusCode != 400 {
+		t.Fatalf("unknown format: %d", r.StatusCode)
+	}
+	if r, _ := e.do(t, "GET", "/api/v1/report", "", nil); r.StatusCode != 401 {
+		t.Fatalf("reports need auth: %d", r.StatusCode)
+	}
+	// another tenant's run id is simply not found
+	other := e.s.cfg.Store.ForTenant("someone-else")
+	if _, err := other.GetRun(ctx, run.ID); err == nil {
+		t.Fatal("tenant isolation broken")
+	}
+	// state carries the pinned-bar headline
+	st := getState(t, e)
+	if st.Headline["baseline"].MLXGen != 100 || st.Headline["baseline"].GPUBW != 355 {
+		t.Fatalf("headline: %+v", st.Headline)
+	}
 }

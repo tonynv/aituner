@@ -96,7 +96,7 @@ func run(port int, noTUI, noOpen bool) error {
 	defer stop()
 
 	srv, err := api.New(ctx, api.Config{Store: db, Tenant: "local", Platform: plat, Token: token, DataDir: dataDir,
-		CanIRun: canirun.New(), HF: hf.New(), Ollama: bench.NewOllama(), Runner: tune.NewRunner(), Log: func(s string) { log.Print(s) }})
+		CanIRun: canirun.New(), HF: hf.New(), Ollama: bench.NewOllama(), Runner: tune.NewRunner(), Version: version, Log: func(s string) { log.Print(s) }})
 	if err != nil {
 		return err
 	}

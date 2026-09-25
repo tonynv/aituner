@@ -72,6 +72,22 @@ def gpu(args):
         emit(event="result", suite="gpu", engine="mlx", metric=f"matmul_{name}", unit="TFLOPS", trials=trials)
         del a, b
 
+    # sustained run: continuous fp16 matmul, one throughput sample per second. A machine that throttles shows a falling
+    # series; the report derives the drop from the first vs last third.
+    a = mx.random.normal((n, n)).astype(mx.float16)
+    b = mx.random.normal((n, n)).astype(mx.float16)
+    mx.eval(a, b)
+    series = []
+    for sec in range(args.sustain_seconds):
+        t0, iters = time.perf_counter(), 0
+        while time.perf_counter() - t0 < 1.0:
+            mx.eval(a @ b)
+            iters += 1
+        series.append(2 * n**3 * iters / (time.perf_counter() - t0) / 1e12)
+        emit(event="trial", suite="gpu", metric="sustained_matmul_fp16", value=series[-1], unit="TFLOPS", i=sec + 1)
+    emit(event="result", suite="gpu", engine="mlx", metric="sustained_matmul_fp16", unit="TFLOPS", trials=series)
+    del a, b
+
     # memory-bound elementwise op: reads N bytes and writes N bytes
     elems = args.bw_mib * 1024 * 1024 // 4
     x = mx.ones((elems,), dtype=mx.float32)
@@ -142,6 +158,36 @@ def llm(args):
              prompt_tokens=args.prompt_tokens, gen_tokens=args.gen_tokens)
 
 
+def sweep(args):
+    """Prefill speed at several prompt lengths and decode speed at a deep context, on one loaded model."""
+    import mlx.core as mx
+    from mlx_lm import load, stream_generate
+
+    mx.random.seed(0)
+    model, tok, cfg = load(args.model, return_config=True, tokenizer_config={"trust_remote_code": False})
+    tok._eos_token_ids = {}
+    vocab = cfg.get("vocab_size") or cfg["text_config"]["vocab_size"]
+
+    def run(prompt_tokens, gen_tokens):
+        prompt = mx.random.randint(0, vocab, (1, prompt_tokens)).tolist()[0]
+        last = None
+        for last in stream_generate(model, tok, prompt, max_tokens=gen_tokens, prefill_step_size=args.prefill_step_size):
+            pass
+        return last
+
+    run(256, 4)  # warmup
+    for p_len in args.prefill:
+        vals = [run(p_len, 4).prompt_tps for _ in range(args.trials)]
+        for i, v in enumerate(vals):
+            emit(event="trial", suite="llm", metric=f"prefill_{p_len}_tps", value=v, unit="tok/s", i=i + 1)
+        emit(event="result", suite="llm", engine="mlx", metric=f"prefill_{p_len}_tps", unit="tok/s", trials=vals, model=args.model, prompt_tokens=p_len)
+    for depth in args.decode_depth:
+        vals = [run(depth, args.gen_tokens).generation_tps for _ in range(args.trials)]
+        for i, v in enumerate(vals):
+            emit(event="trial", suite="llm", metric=f"decode_{depth}_tps", value=v, unit="tok/s", i=i + 1)
+        emit(event="result", suite="llm", engine="mlx", metric=f"decode_{depth}_tps", unit="tok/s", trials=vals, model=args.model, prompt_tokens=depth)
+
+
 def main():
     p = argparse.ArgumentParser()
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -150,6 +196,7 @@ def main():
     g.add_argument("--trials", type=int, default=5)
     g.add_argument("--matmul-n", type=int, default=4096)
     g.add_argument("--bw-mib", type=int, default=1024)
+    g.add_argument("--sustain-seconds", type=int, default=20)
     g.set_defaults(fn=gpu)
     f = sub.add_parser("fetch")
     f.add_argument("--model", required=True)
@@ -160,6 +207,14 @@ def main():
     d.add_argument("--allow", required=True)
     d.add_argument("--ignore", required=True)
     d.set_defaults(fn=download)
+    w = sub.add_parser("sweep")
+    w.add_argument("--model", required=True)
+    w.add_argument("--trials", type=int, default=3)
+    w.add_argument("--prefill", type=int, nargs="+", default=[256, 1024, 4096])
+    w.add_argument("--decode-depth", type=int, nargs="+", default=[4096])
+    w.add_argument("--gen-tokens", type=int, default=128)
+    w.add_argument("--prefill-step-size", type=int, default=2048)
+    w.set_defaults(fn=sweep)
     m = sub.add_parser("llm")
     m.add_argument("--model", required=True)
     m.add_argument("--prompt-tokens", type=int, default=512)

@@ -266,3 +266,37 @@ func (t *Tenant) GetSetting(ctx context.Context, key string) (string, error) {
 	}
 	return v, err
 }
+
+// GetMachine returns a stored hardware snapshot.
+func (t *Tenant) GetMachine(ctx context.Context, id string) (Machine, error) {
+	var m Machine
+	var snap string
+	err := t.db.QueryRowContext(ctx, `SELECT id,fingerprint,snapshot,detected_at FROM machines WHERE tenant_id=? AND id=?`, t.id, id).
+		Scan(&m.ID, &m.Fingerprint, &snap, &m.DetectedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Machine{}, ErrNotFound
+	}
+	m.Snapshot = json.RawMessage(snap)
+	return m, err
+}
+
+// ListRuns returns the most recent runs, newest first.
+func (t *Tenant) ListRuns(ctx context.Context, limit int) ([]Run, error) {
+	if limit < 1 || limit > 200 {
+		limit = 50
+	}
+	rows, err := t.db.QueryContext(ctx, `SELECT id,machine_id,phase,note,created_at,updated_at FROM runs WHERE tenant_id=? ORDER BY created_at DESC, rowid DESC LIMIT ?`, t.id, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Run{}
+	for rows.Next() {
+		var r Run
+		if err := rows.Scan(&r.ID, &r.MachineID, &r.Phase, &r.Note, &r.CreatedAt, &r.UpdatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}

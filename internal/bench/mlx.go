@@ -201,3 +201,17 @@ func (m MLX) Download(ctx context.Context, repo, dir string, allow, ignore []str
 	_, _, err := m.run(ctx, func(Event) {}, "download", "--model", repo, "--dir", dir, "--allow", string(a), "--ignore", string(i))
 	return err
 }
+
+// Sweep measures prefill speed at several prompt lengths and decode speed at a deep context.
+func (m MLX) Sweep(ctx context.Context, emit Emit, model string, trials int, versions map[string]string) ([]Metric, error) {
+	lines, _, err := m.run(ctx, emit, "sweep", "--model", model, "--trials", fmt.Sprint(trials))
+	if err != nil {
+		return nil, err
+	}
+	for _, l := range lines {
+		if l.Event == "trial" {
+			emit(Event{Level: "trial", Suite: "llm", Message: fmt.Sprintf("%s trial %d: %.0f %s", l.Metric, l.I, l.Value, l.Unit)})
+		}
+	}
+	return metricsFrom(lines, versions), nil
+}
