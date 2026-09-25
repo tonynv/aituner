@@ -286,10 +286,30 @@ func (ExecRunner) Look(name string) (string, bool) {
 	return "", false
 }
 
+// sessionVars are per-session markers and credentials of a Claude Code session that may have started aituner. A Terminal
+// window (or anything else) launched from here must not inherit them: Claude Code would treat every later `claude` in
+// that Terminal as a child session and stop saving transcripts, and the messaging token is another session's credential.
+var sessionVars = []string{"CLAUDECODE", "CLAUDE_PID", "CLAUDE_EFFORT", "CLAUDE_CODE_CHILD_SESSION", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_SESSION_ATTENDED",
+	"CLAUDE_CODE_BRIDGE_SESSION_ID", "CLAUDE_CODE_MESSAGING_SOCKET", "CLAUDE_CODE_MESSAGING_TOKEN", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_EXECPATH"}
+
+func withoutSessionEnv(env []string) []string {
+	out := make([]string, 0, len(env))
+next:
+	for _, kv := range env {
+		for _, v := range sessionVars {
+			if strings.HasPrefix(kv, v+"=") {
+				continue next
+			}
+		}
+		out = append(out, kv)
+	}
+	return out
+}
+
 func (ExecRunner) Run(ctx context.Context, emit Emit, dir string, env []string, name string, args ...string) error {
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "HOMEBREW_NO_ENV_HINTS=1", "HOMEBREW_NO_INSTALL_CLEANUP=1", "NONINTERACTIVE=1")
+	cmd.Env = append(withoutSessionEnv(os.Environ()), "HOMEBREW_NO_ENV_HINTS=1", "HOMEBREW_NO_INSTALL_CLEANUP=1", "NONINTERACTIVE=1")
 	cmd.Env = append(cmd.Env, env...)
 	cmd.WaitDelay = 5 * time.Second
 	stdout, _ := cmd.StdoutPipe()

@@ -568,3 +568,11 @@ func TestAtomicWritesLeaveNoTempFilesAndNeverFollowAPlantedSymlink(t *testing.T)
 		t.Fatalf("secrets must be owner-only: %v", fi.Mode().Perm())
 	}
 }
+
+func TestWithoutSessionEnvDropsOnlyClaudeCodeSessionState(t *testing.T) {
+	in := []string{"HOME=/h", "CLAUDECODE=1", "CLAUDE_CODE_CHILD_SESSION=1", "CLAUDE_CODE_MESSAGING_TOKEN=s", "CLAUDE_CODE_SESSION_ID=x", "CLAUDE_CONFIG_DIR=/c", "PATH=/bin", "CLAUDECODEX=keep"}
+	got := strings.Join(withoutSessionEnv(in), " ")
+	if got != "HOME=/h CLAUDE_CONFIG_DIR=/c PATH=/bin CLAUDECODEX=keep" {
+		t.Fatalf("%s", got)
+	}
+}
