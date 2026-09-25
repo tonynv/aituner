@@ -63,7 +63,8 @@ Legend: [x] done, [~] partial, [ ] not done. Build order: DataStore -> API -> UI
 - [x] internal/monitor (macmon stream, built-in fallback, on-demand, ring buffer) with real-capture, fake and live tests
 - [x] Terminal monitors (macmon, mactop, nvtop): install via Homebrew after confirmation, open in Terminal
 - [x] GET /api/v1/monitor, POST /api/v1/monitor/tool
-- [x] Monitor tab, menu bar view, Setup opens Monitor once a model serves; tab strip restyled (breadcrumb chevrons, underline)
+- [x] Monitor tab, menu bar view, Setup opens Monitor once a model serves
+- [x] Navigation: native-style sidebar (owner choice over a segmented control), button-like rows, top bar on phones
 - [ ] Gateway throughput (tokens/s of real requests) on the Monitor
 
 ## Known failing

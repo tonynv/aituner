@@ -21,7 +21,7 @@ export function liveMonitor({ keep = 300, tools = false } = {}) {
     } catch (e) {
       live.error = e.status === 401 ? 'Session expired: reopen aituner.' : 'Cannot reach aituner.';
     }
-    if (!stopped) timer = setTimeout(tick, 1000);
+    if (!stopped) timer = setTimeout(tick, live.samples.length ? 1000 : 300); // quick until the first sample lands
   }
   tick();
   return {

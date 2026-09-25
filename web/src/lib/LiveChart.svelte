@@ -23,6 +23,7 @@
   }
   const last = (vals) => { for (let i = vals.length - 1; i >= 0; i--) if (vals[i] >= 0) return vals[i]; return -1; };
   const desc = $derived(`${label}, last ${span(seconds)}. ` + series.map((s) => `${s.label}: now ${last(s.values) < 0 ? 'no reading' : fmtNum(last(s.values)) + ' ' + unit}, peak ${fmtNum(Math.max(0, ...s.values))} ${unit}`).join('; '));
+  const tick = (v) => (Number.isInteger(v) ? String(v) : v < 1 ? v.toFixed(2).replace(/0$/, '') : fmtNum(v));
   const span = (sec) => (sec < 90 ? `${Math.round(sec)} s` : `${Math.round(sec / 60)} min`);
   const ago = (i) => { const s = Math.round(((n - 1 - i) / Math.max(1, n - 1)) * seconds); return s ? `${s} s ago` : 'now'; };
 </script>
@@ -35,7 +36,7 @@
     <svg viewBox="0 0 {W} {H}" role="img" aria-label={desc} onpointermove={move} onpointerleave={() => (hover = -1)}>
       {#each [0, 0.5, 1] as f}
         <line x1={L} x2={W - R} y1={y(top * f)} y2={y(top * f)} class="grid" />
-        <text x={L - 5} y={y(top * f) + 3.5} class="tick" text-anchor="end">{Number.isInteger(top * f) ? top * f : fmtNum(top * f)}</text>
+        <text x={L - 5} y={y(top * f) + 3.5} class="tick" text-anchor="end">{tick(top * f)}</text>
       {/each}
       {#each series as s}<path d={path(s.values)} class="line {s.cls}" />{/each}
       {#if hover >= 0}

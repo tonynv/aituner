@@ -7,6 +7,7 @@
     memory: '<rect x="3" y="8" width="18" height="8"/><path d="M7 8v8M11 8v8M15 8v8M6 16v3M10 16v3M14 16v3M18 16v3"/>',
     disk: '<ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>',
     power: '<path d="M12 3v9"/><path d="M6.3 6.3a8 8 0 1 0 11.4 0"/>',
+    activity: '<path d="M3 12h4l3-8 4 16 3-8h4"/>',
     monitor: '<rect x="3" y="4" width="18" height="12"/><path d="M8 20h8M12 16v4"/>',
     terminal: '<path d="M4 5l6 6-6 6M12 19h8"/>',
     check: '<path d="M4 12l5 5L20 6"/>',

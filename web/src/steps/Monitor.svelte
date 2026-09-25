@@ -81,7 +81,7 @@
       <Meter label="Memory" value={now.ram_total ? now.ram_used : -1} max={now.ram_total || 1} text={fmtBytes(now.ram_used)} sub="of {fmtBytes(now.ram_total)}{now.swap_used > 0 ? `, swap ${fmtBytes(now.swap_used)}` : ''}" />
       {#if full}
         <div class="stat"><span class="l">Power</span><span class="v mono">{fmtNum(now.sys_w)}<span class="u">W system</span></span>
-          <span class="muted small mono">GPU {fmtNum(now.gpu_w)} W · CPU {fmtNum(now.cpu_w)} W · ANE {fmtNum(now.ane_w)} W</span></div>
+          <span class="muted small mono">GPU {fmtNum(now.gpu_w)} · CPU {fmtNum(now.cpu_w)} · ANE {fmtNum(now.ane_w)} W</span></div>
         <div class="stat"><span class="l">Temperature</span><span class="v mono">{now.gpu_temp_c < 0 ? 'no reading' : `${fmtNum(now.gpu_temp_c, 0)} °C`}<span class="u">GPU</span></span>
           <span class="muted small mono">CPU {now.cpu_temp_c < 0 ? 'no reading' : `${fmtNum(now.cpu_temp_c, 0)} °C`}</span></div>
       {/if}
@@ -133,7 +133,7 @@
   .tight { gap: 10px; }
   .small { font-size: 13px; }
   .who { display: flex; flex-direction: column; min-width: 0; }
-  .tiles { display: grid; gap: 18px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 180px), 1fr)); }
+  .tiles { display: grid; gap: 18px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr)); }
   .stat { display: flex; flex-direction: column; gap: 2px; }
   .l { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
   .v { font-size: 14px; font-weight: 600; } .u { font-weight: 400; color: var(--muted); font-size: 12px; margin-left: 4px; }

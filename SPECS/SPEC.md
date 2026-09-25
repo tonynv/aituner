@@ -221,8 +221,10 @@ the app on the user's first Run click, after consent. Never uses `sudo`. On Linu
 
 ## 11. UI
 
-Tab strip: the main path (Hardware > Downloads > Setup > Monitor) reads left to right with chevrons, the current tab is
-underlined; the optional performance tabs sit after a divider. Originally a five-step stepper; monochrome-forward, near-black dark / true-white light, mono + sans type, thin-line icons,
+Native-style sidebar (owner request: "look more like a native macOS app"): sections with thin-line icons, the main path
+(Hardware, Downloads, Setup, Monitor) first and the optional Performance group below; rows act like buttons (fill on
+hover, darker when pressed, filled when selected, 3px radius), done sections show a check and locked ones a lock. Below
+760px the sidebar becomes a top bar whose sections scroll sideways, keeping the current one in view. Originally a five-step stepper; monochrome-forward, near-black dark / true-white light, mono + sans type, thin-line icons,
 44px+ touch targets, safe-area aware, offline shell via service worker (API calls need the server; UI degrades
 with a clear banner). Diff view for tuning; before/after table with delta and "within noise" marking; recommendation
 cards grouped code / chat / image with fit grade, runtime, size, estimated tok/s, provenance and one-click
