@@ -433,3 +433,19 @@ Measured with the model benchmark harness (`mlxbench.py modelbench`: real source
 - Launcher scrubs inherited Claude Code session variables, and aituner strips them from every command it spawns.
 - The context reported to Claude Code no longer depends on a benchmark in the current run (Metal is probed once).
 - Ollama is optional (comparison only) and was removed from the reference machine; aituner works without it.
+
+### 16.9 Measured model speeds (reference machine, real code prompts, median)
+
+| Model | Size | Prompt speed @4K | Reply speed @4K | Reply speed @16K | Peak mem | Lean Claude Code cold turn | Notes |
+|---|---|---|---|---|---|---|---|
+| Qwen3.6-35B-A3B Uncensored Heretic 4bit (froggeric) | 20.4 GB | 608 tok/s | 62.8 | 54.2 | 22.6 GB | 3.2 s | **recommended**: MoE, low refusal, tool calls work; tight in a 25 GB budget |
+| Qwen2.5-Coder-1.5B 8bit | 1.7 GB | 1874 | 122 | 92.3 | 2.9 GB | 0.9 s | too small for real agentic work |
+| Llama-3.1-8B-Instruct 4bit | 4.5 GB | 376 | 54.1 | 37.0 | 7.3 GB | 4.8 s | loops on tool calls (397 requests, never finished) |
+| gpt-oss-20B Instruct Heretic MXFP4 | 12.2 GB | 506 | 56.0 | 44.0 | 13.5 GB | ~3 s | fast; tool calling unreliable (echoes the tool schema); 8-bit KV unsupported (sliding window) |
+| Qwen3-Coder-30B-A3B 4bit | 17.2 GB | 477 | 45.6 | 28.9 | 19.5 GB | 3.6 s | works once its XML tool format is parsed; not uncensored |
+| Ornith-1.0-9B 4bit | 6.0 GB | 281 | 45.3 | 41.6 | 8.2 GB | 6.5 s | |
+| Qwen3-8B 4bit | 4.6 GB | 272 | 40.6 | 26.7 | 7.6 GB | 6.3 s | |
+| granite-4.1-8b 8bit | 9.4 GB | 233 | 27.0 | 19.4 | 12.7 GB | 7.4 s | |
+
+End to end (Claude Code through `aituner-claude`, Qwen3.6-35B-A3B Heretic): first reply of a session 6.5 s headless, ~10 s interactive; a follow-up turn 3.7 s. The same setup before this work (unmodified Claude Code, 8B model): 285 s and 190 s. `--strict-mcp-config` matters in interactive mode: without it the user's MCP tools added ~5K tokens (request 7.0K to 1.8K tokens).
+Findings along the way: `--tools` does not add tools back under `--bare`; the subagent's claim that `--system-prompt` does not exist was wrong (it is in `claude --help`); mlx_lm.server answers 404 for any generation failure, which Claude Code reported as "unrecognized model" (the gateway now returns 500 with the real message); Llama 3.1's chat template rejects several tool calls in one assistant message (the gateway sends one call per message).

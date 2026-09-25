@@ -46,5 +46,5 @@ Legend: [x] done, [~] partial, [ ] not done. Build order: DataStore -> API -> UI
 - [x] Model benchmark harness (Python workload, Go wrapper, API, Downloads table)
 - [x] Lean Claude Code launcher (16x smaller request)
 - [x] Prompt-cache bound; context reported without a benchmark
-- [ ] End-to-end timing of lean Claude Code turns per model; pick and document the recommended coding model
-- [ ] Curated low-refusal MoE candidates in the recommendations
+- [x] End-to-end timing of lean Claude Code turns per model; recommended coding model documented (SPEC 16.9)
+- [x] Low-refusal MoE candidates found on Hugging Face and benchmarked (froggeric Qwen3.6-35B-A3B Heretic, nightmedia gpt-oss-20B Heretic)
