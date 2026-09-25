@@ -25,7 +25,7 @@ func fx(t *testing.T, name string) []byte {
 	return b
 }
 
-var weather = map[string]bool{"get_weather": true}
+var weather = ToolSet{"get_weather": nil}
 
 func TestToOpenAIMessagesSystemToolsAndToolResults(t *testing.T) {
 	req := `{"model":"claude-sonnet-x","max_tokens":512,"temperature":0.2,"top_p":0.9,"top_k":40,"stop_sequences":["END"],"stream":true,
@@ -56,7 +56,7 @@ func TestToOpenAIMessagesSystemToolsAndToolResults(t *testing.T) {
 	if err := json.Unmarshal(b, &got); err != nil {
 		t.Fatal(err)
 	}
-	if tr.Model != "claude-sonnet-x" || !tr.Stream || len(tr.Tools) != 1 || !tr.Tools["get_weather"] {
+	if tr.Model != "claude-sonnet-x" || !tr.Stream || len(tr.Tools) != 1 || !tr.Tools.Has("get_weather") {
 		t.Fatalf("meta: %+v", tr)
 	}
 	m := got.Messages
@@ -155,7 +155,7 @@ func TestFromOpenAIRecoversRealToolCallsFromText(t *testing.T) {
 }
 
 func TestExtractToolCalls(t *testing.T) {
-	names := map[string]bool{"read_file": true, "bash": true}
+	names := ToolSet{"read_file": nil, "bash": nil}
 	cases := []struct {
 		name, in string
 		calls    []string
@@ -283,7 +283,7 @@ func names(evs []ev) []string {
 	return n
 }
 
-func stream(t *testing.T, fixture string, tools map[string]bool) []ev {
+func stream(t *testing.T, fixture string, tools ToolSet) []ev {
 	t.Helper()
 	var buf bytes.Buffer
 	if err := StreamToAnthropic(&buf, nil, bytes.NewReader(fx(t, fixture)), "claude-x", tools); err != nil {
@@ -626,7 +626,7 @@ func FuzzGateway(f *testing.F) {
 				t.Fatalf("translated body is not JSON: %v", e)
 			}
 		}
-		prose, calls := ExtractToolCalls(text, map[string]bool{"a": true})
+		prose, calls := ExtractToolCalls(text, ToolSet{"a": nil})
 		for _, c := range calls {
 			var o map[string]any
 			if c.Name != "a" || json.Unmarshal(c.Args, &o) != nil {
@@ -635,7 +635,7 @@ func FuzzGateway(f *testing.F) {
 		}
 		_ = prose
 		var buf bytes.Buffer
-		_ = StreamToAnthropic(&buf, nil, strings.NewReader("data: "+text+"\n\n"), "m", map[string]bool{"a": true})
+		_ = StreamToAnthropic(&buf, nil, strings.NewReader("data: "+text+"\n\n"), "m", ToolSet{"a": nil})
 		if b, _, err := sanitize(req, allowedChat); err == nil {
 			var m map[string]any
 			if json.Unmarshal(b, &m) != nil || m["model"] != "default_model" {
@@ -810,5 +810,57 @@ func TestChatTemplateKwargsAreRestrictedToFlatScalars(t *testing.T) {
 	big += `"z":1}}`
 	if b, _, _ := sanitize([]byte(big), allowedChat); strings.Contains(string(b), "chat_template_kwargs") {
 		t.Error("more than 16 keys must be dropped")
+	}
+}
+
+func TestParallelSemicolonSeparatedCallsAreExtracted(t *testing.T) {
+	tools := ToolSet{"Bash": nil, "Read": nil}
+	text := `{"name": "Bash", "parameters": {"command": "ls"}}; {"name": "Read", "parameters": {"file_path": "/a"}}`
+	prose, calls := ExtractToolCalls(text, tools)
+	if prose != "" || len(calls) != 2 || calls[0].Name != "Bash" || calls[1].Name != "Read" {
+		t.Fatalf("prose=%q calls=%+v", prose, calls)
+	}
+	// with the python tag Llama uses, and streamed one character at a time
+	f := newFilter(tools)
+	var shown string
+	for _, r := range "<|python_tag|>" + text {
+		shown += f.Push(string(r))
+	}
+	rest, got := f.Finish()
+	if shown+rest != "" || len(got) != 2 {
+		t.Fatalf("stream leaked %q / %q calls=%d", shown, rest, len(got))
+	}
+	// JSON followed by prose is still prose, and an unknown tool is never run
+	if _, c := ExtractToolCalls(`{"name":"Bash","parameters":{}} and then I will`, tools); len(c) != 0 {
+		t.Fatal("prose after JSON was treated as a call")
+	}
+	if _, c := ExtractToolCalls(`{"name":"Rm","parameters":{}}; {"name":"Bash","parameters":{}}`, tools); len(c) != 0 {
+		t.Fatal("a sequence with an undeclared tool must not run partially")
+	}
+}
+
+func TestRepairFitsArgumentsToTheSchema(t *testing.T) {
+	schema := json.RawMessage(`{"type":"object","properties":{"command":{"type":"string"},"timeout":{"type":"number"},"background":{"type":"boolean"},"limit":{"type":"integer"},"path":{"type":"string"}},"required":["command"]}`)
+	ts := ToolSet{"Bash": schema}
+	got := string(ts.Repair("Bash", json.RawMessage(`{"command":"ls","timeout":0,"background":"False","limit":"10","path":"","bogus":1}`)))
+	var m map[string]any
+	if err := json.Unmarshal([]byte(got), &m); err != nil {
+		t.Fatal(err)
+	}
+	if m["command"] != "ls" || m["background"] != false || m["limit"] != float64(10) {
+		t.Fatalf("not coerced: %s", got)
+	}
+	for _, k := range []string{"timeout", "path", "bogus"} {
+		if _, ok := m[k]; ok {
+			t.Fatalf("%s should have been dropped: %s", k, got)
+		}
+	}
+	// a required argument is never dropped, even when it looks like a placeholder
+	if got := string(ts.Repair("Bash", json.RawMessage(`{"command":""}`))); got != `{"command":""}` {
+		t.Fatalf("required argument dropped: %s", got)
+	}
+	// no schema, or arguments that are not an object: untouched
+	if got := string(ToolSet{"X": nil}.Repair("X", json.RawMessage(`{"a":0}`))); got != `{"a":0}` {
+		t.Fatalf("%s", got)
 	}
 }

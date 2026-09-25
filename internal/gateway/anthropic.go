@@ -86,7 +86,7 @@ type Translated struct {
 	Body   map[string]any
 	Model  string // the model name the client asked for, echoed back in responses
 	Stream bool
-	Tools  map[string]bool // declared tool names: only these may be extracted from model text as tool calls
+	Tools  ToolSet // declared tool names: only these may be extracted from model text as tool calls
 }
 
 // ToOpenAI converts an Anthropic Messages request into an OpenAI chat-completions body.
@@ -95,7 +95,7 @@ func ToOpenAI(raw []byte) (Translated, error) {
 	return Translated{Body: body, Model: model, Stream: stream, Tools: names}, err
 }
 
-func toOpenAI(raw []byte) (map[string]any, string, bool, map[string]bool, error) {
+func toOpenAI(raw []byte) (map[string]any, string, bool, ToolSet, error) {
 	var req aMsgReq
 	if err := json.Unmarshal(raw, &req); err != nil {
 		return nil, "", false, nil, fmt.Errorf("invalid JSON body: %w", err)
@@ -190,12 +190,12 @@ func toOpenAI(raw []byte) (map[string]any, string, bool, map[string]bool, error)
 		out["stop"] = req.StopSequences
 	}
 	var tools []map[string]any
-	names := map[string]bool{}
+	names := ToolSet{}
 	for _, t := range req.Tools {
 		if len(t.InputSchema) == 0 { // server-side tools (web search etc.) have no schema and cannot run locally
 			continue
 		}
-		names[t.Name] = true
+		names[t.Name] = t.InputSchema
 		tools = append(tools, map[string]any{"type": "function", "function": map[string]any{"name": t.Name, "description": t.Description, "parameters": json.RawMessage(t.InputSchema)}})
 	}
 	if len(tools) > 0 {
@@ -284,7 +284,7 @@ type oaResp struct {
 }
 
 // FromOpenAI converts a non-streaming OpenAI response into an Anthropic message.
-func FromOpenAI(raw []byte, model string, names map[string]bool) (map[string]any, error) {
+func FromOpenAI(raw []byte, model string, names ToolSet) (map[string]any, error) {
 	var r oaResp
 	if err := json.Unmarshal(raw, &r); err != nil || len(r.Choices) == 0 {
 		return nil, fmt.Errorf("unexpected response from the model server")
@@ -382,7 +382,7 @@ func argsFragment(raw json.RawMessage) string {
 // StreamToAnthropic reads an OpenAI chat-completions SSE stream and writes the equivalent Anthropic Messages SSE
 // event sequence: message_start, content blocks (text and tool_use with input_json_delta), message_delta, message_stop.
 // When the request declared tools, text that might be a tool call is held back until it is known to be one or not.
-func StreamToAnthropic(w io.Writer, flusher http.Flusher, upstream io.Reader, model string, names map[string]bool) error {
+func StreamToAnthropic(w io.Writer, flusher http.Flusher, upstream io.Reader, model string, names ToolSet) error {
 	out := sseWriter{w, flusher}
 	id := newID("msg_")
 	started, textOpen := false, false

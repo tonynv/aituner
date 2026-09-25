@@ -39,9 +39,40 @@ func decodeOne(s string) (json.RawMessage, int, error) {
 	return raw, int(dec.InputOffset()), nil
 }
 
+// decodeSeq decodes consecutive JSON values separated by whitespace, ';' or ',' (Llama 3.1 separates parallel calls with
+// ';'). err is nil only when all of s was consumed; io.ErrUnexpectedEOF means the last value is cut off.
+func decodeSeq(s string) ([]json.RawMessage, error) {
+	var out []json.RawMessage
+	for {
+		s = strings.TrimLeft(s, " \n\t\r;,")
+		if s == "" {
+			return out, nil
+		}
+		raw, n, err := decodeOne(s)
+		if err != nil {
+			return out, err
+		}
+		out = append(out, raw)
+		s = s[n:]
+	}
+}
+
+// callsFromSeq is callsFromJSON over a sequence; ok is false unless every value is a declared tool call.
+func callsFromSeq(vals []json.RawMessage, names ToolSet) ([]Call, bool) {
+	var calls []Call
+	for _, v := range vals {
+		got := callsFromJSON(v, names)
+		if len(got) == 0 {
+			return nil, false
+		}
+		calls = append(calls, got...)
+	}
+	return calls, len(calls) > 0
+}
+
 // callsFromJSON accepts {"name","arguments"|"parameters"|"input"}, {"function":{"name","arguments"}} or an array of
 // those, and keeps only calls whose name is declared.
-func callsFromJSON(raw json.RawMessage, names map[string]bool) []Call {
+func callsFromJSON(raw json.RawMessage, names ToolSet) []Call {
 	raw = json.RawMessage(bytes.TrimSpace(raw))
 	if len(raw) == 0 {
 		return nil
@@ -74,10 +105,10 @@ func callsFromJSON(raw json.RawMessage, names map[string]bool) []Call {
 	if name == "" && o.Function != nil {
 		name, args = o.Function.Name, o.Function.Arguments
 	}
-	if !names[name] {
+	if !names.Has(name) {
 		return nil
 	}
-	return []Call{{Name: name, Args: inputJSON(args)}}
+	return []Call{{Name: name, Args: names.Repair(name, inputJSON(args))}}
 }
 
 func firstNonEmpty(rs ...json.RawMessage) json.RawMessage {
@@ -90,7 +121,7 @@ func firstNonEmpty(rs ...json.RawMessage) json.RawMessage {
 }
 
 // ExtractToolCalls finds declared-tool calls in text and returns the prose that remains.
-func ExtractToolCalls(text string, names map[string]bool) (string, []Call) {
+func ExtractToolCalls(text string, names ToolSet) (string, []Call) {
 	if len(names) == 0 {
 		return strings.TrimSpace(stripSpecial(text)), nil
 	}
@@ -124,7 +155,12 @@ func ExtractToolCalls(text string, names map[string]bool) (string, []Call) {
 	// 2. <|python_tag|> followed by JSON (Llama 3.x)
 	if i := strings.Index(text, "<|python_tag|>"); i >= 0 {
 		body := text[i+len("<|python_tag|>"):]
-		if raw, n, err := decodeOne(strings.TrimSpace(body)); err == nil {
+		if vals, err := decodeSeq(body); err == nil {
+			if got, ok := callsFromSeq(vals, names); ok {
+				calls = append(calls, got...)
+				cut(i, len(text))
+			}
+		} else if raw, n, err := decodeOne(strings.TrimSpace(body)); err == nil {
 			if got := callsFromJSON(raw, names); len(got) > 0 {
 				calls = append(calls, got...)
 				lead := len(body) - len(strings.TrimLeft(body, " \n\t"))
@@ -163,8 +199,8 @@ func ExtractToolCalls(text string, names map[string]bool) (string, []Call) {
 	}
 	// 4. the whole message is bare JSON
 	if t := strings.TrimSpace(text); t != "" && (t[0] == '{' || t[0] == '[') && len(calls) == 0 {
-		if raw, n, err := decodeOne(t); err == nil && strings.TrimSpace(t[n:]) == "" {
-			if got := callsFromJSON(raw, names); len(got) > 0 {
+		if vals, err := decodeSeq(t); err == nil {
+			if got, ok := callsFromSeq(vals, names); ok {
 				calls, text = got, ""
 			}
 		}
@@ -186,7 +222,7 @@ var toolMarkers = []string{"<tool_call>", "<|python_tag|>"}
 
 // classify decides from the text so far (leading whitespace ignored). Unrelated text passes immediately, so answers
 // stream normally; only text that could be a tool call is held back.
-func classify(so_far string, names map[string]bool) verdict {
+func classify(so_far string, names ToolSet) verdict {
 	t := strings.TrimLeft(so_far, " \n\t")
 	if t == "" {
 		return hold
@@ -222,19 +258,17 @@ func classify(so_far string, names map[string]bool) verdict {
 		}
 		return pass
 	case '{', '[':
-		raw, n, err := decodeOne(t)
+		vals, err := decodeSeq(t)
 		switch {
-		case err == nil && strings.TrimSpace(t[n:]) == "":
-			if len(callsFromJSON(raw, names)) > 0 {
+		case err == nil:
+			if _, ok := callsFromSeq(vals, names); ok {
 				return tool
 			}
 			return pass
-		case err == nil:
-			return pass // JSON followed by more text: prose
 		case errors.Is(err, io.ErrUnexpectedEOF):
 			return hold
 		default:
-			return pass
+			return pass // JSON followed by prose, or not JSON at all
 		}
 	}
 	return pass
@@ -288,14 +322,14 @@ const (
 // filter decides what part of streamed model text is shown and what is a tool call, holding back only text that
 // might still turn out to be one.
 type filter struct {
-	names map[string]bool
+	names ToolSet
 	mode  int
 	buf   string          // held text while undecided / scanning (bounded by maxUndecided)
 	tool  strings.Builder // everything since a tool call began (a Builder: appending is linear, not quadratic)
 	off   bool            // a limit was hit: stop looking for tool calls, pass everything through
 }
 
-func newFilter(names map[string]bool) *filter {
+func newFilter(names ToolSet) *filter {
 	f := &filter{names: names}
 	if len(names) == 0 {
 		f.mode = modeScan // no tools declared: nothing to look for
