@@ -15,6 +15,7 @@ type Health struct {
 	Load1          float64 `json:"load1"`
 	Cores          int     `json:"cores"`
 	FreeMemPct     int     `json:"free_mem_pct"` // -1 unknown
+	GPUBusyPct     int     `json:"gpu_busy_pct"` // -1 unknown
 }
 
 var loadRe = regexp.MustCompile(`([0-9]+(?:\.[0-9]+)?)`)
@@ -27,6 +28,18 @@ func ParseLoadAvg(s string) (float64, bool) {
 	}
 	v, err := strconv.ParseFloat(m, 64)
 	return v, err == nil
+}
+
+var gpuBusyRe = regexp.MustCompile(`"Device Utilization %"\s*=\s*(\d+)`)
+
+// ParseGPUBusy reads the GPU's "Device Utilization %" from `ioreg -r -d 1 -c IOAccelerator` (no admin needed).
+func ParseGPUBusy(out string) (int, bool) {
+	m := gpuBusyRe.FindStringSubmatch(out)
+	if m == nil {
+		return 0, false
+	}
+	v, err := strconv.Atoi(m[1])
+	return v, err == nil && v >= 0 && v <= 100
 }
 
 var speedRe = regexp.MustCompile(`CPU_Speed_Limit\s*=\s*(\d+)`)

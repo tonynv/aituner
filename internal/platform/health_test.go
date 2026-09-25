@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -49,5 +50,22 @@ func TestWarnings(t *testing.T) {
 	w := Health{OnBattery: true, ThermalWarning: true, ThermalNote: "x", Cores: 10, Load1: 8, FreeMemPct: 5}.Warnings("baseline")
 	if len(w) != 4 {
 		t.Fatalf("want 4 warnings, got %v", w)
+	}
+}
+
+// testdata/ioreg_accelerator.txt is trimmed from `ioreg -r -d 1 -c IOAccelerator` on the reference machine (M1 Max).
+func TestParseGPUBusyRealCapture(t *testing.T) {
+	b, err := os.ReadFile("testdata/ioreg_accelerator.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v, ok := ParseGPUBusy(string(b)); !ok || v < 0 || v > 100 {
+		t.Fatalf("%v %v", v, ok)
+	}
+	if _, ok := ParseGPUBusy("no accelerator"); ok {
+		t.Fatal("parsed garbage")
+	}
+	if _, ok := ParseGPUBusy(`"Device Utilization %"=250`); ok {
+		t.Fatal("accepted an out-of-range percentage")
 	}
 }

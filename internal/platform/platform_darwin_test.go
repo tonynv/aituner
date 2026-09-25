@@ -59,3 +59,11 @@ func TestDetectLive(t *testing.T) {
 		t.Fatalf("implausible: %+v", h)
 	}
 }
+
+// Live: this machine reports every health field, including GPU utilisation, without admin rights.
+func TestCheckHealthLive(t *testing.T) {
+	h := CheckHealth(context.Background())
+	if h.Cores <= 0 || h.FreeMemPct < 0 || h.GPUBusyPct < 0 || h.SpeedLimitPct <= 0 {
+		t.Fatalf("%+v", h)
+	}
+}

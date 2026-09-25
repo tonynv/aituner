@@ -8,9 +8,9 @@ import (
 	"time"
 )
 
-// CheckHealth samples power source, thermal state, load and memory pressure.
+// CheckHealth samples power source, thermal state, load, memory pressure and GPU utilisation.
 func CheckHealth(ctx context.Context) Health {
-	h := Health{FreeMemPct: memoryFreePct(ctx), SpeedLimitPct: 100}
+	h := Health{FreeMemPct: memoryFreePct(ctx), SpeedLimitPct: 100, GPUBusyPct: -1}
 	if out, err := Run(ctx, 5*time.Second, "/usr/bin/pmset", "-g", "batt"); err == nil {
 		h.OnBattery = strings.Contains(out, "Battery Power")
 	}
@@ -25,6 +25,11 @@ func CheckHealth(ctx context.Context) Health {
 	}
 	if n, ok := sysctlInt(ctx, "hw.ncpu"); ok {
 		h.Cores = int(n)
+	}
+	if out, err := Run(ctx, 3*time.Second, "/usr/sbin/ioreg", "-r", "-d", "1", "-c", "IOAccelerator"); err == nil {
+		if v, ok := ParseGPUBusy(out); ok {
+			h.GPUBusyPct = v
+		}
 	}
 	return h
 }
