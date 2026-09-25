@@ -632,3 +632,41 @@ func TestBenchmarkIsRefusedWhileAModelIsLoaded(t *testing.T) {
 		t.Fatalf("stopped: %+v", st.Serving)
 	}
 }
+
+func TestConnectEndpointsAreGatedAndPlansAreComplete(t *testing.T) {
+	e := newEnv(t)
+	c := e.json(t, "GET", "/api/v1/connect", "", 200)
+	items := c["items"].([]any)
+	if len(items) != 5 || c["model_running"] != false {
+		t.Fatalf("%v", c)
+	}
+	ids := map[string]bool{}
+	for _, it := range items {
+		m := it.(map[string]any)
+		ids[m["id"].(string)] = true
+		plan := m["plan"].(map[string]any)
+		if plan["title"] == "" || len(plan["steps"].([]any)) == 0 || len(plan["will_not_touch"].([]any)) == 0 {
+			t.Errorf("incomplete plan: %v", plan)
+		}
+	}
+	for _, id := range []string{"claude", "vscode", "neovim", "vim-tmux", "openai"} {
+		if !ids[id] {
+			t.Errorf("missing integration %s", id)
+		}
+	}
+	if strings.Contains(fmt.Sprint(c), e.s.gwKey) {
+		t.Fatal("the gateway key must not appear in the connect listing")
+	}
+	post := func(path, body string, want int) map[string]any { return e.json(t, "POST", path, body, want) }
+	post("/api/v1/connect/setup", `{"id":"claude"}`, 400)                  // must confirm
+	post("/api/v1/connect/setup", `{"id":"claude","confirm":true}`, 409)   // no model is being served
+	post("/api/v1/connect/setup", `{"id":"rm -rf /","confirm":true}`, 404) // only known integrations
+	post("/api/v1/connect/setup", `{"id":"claude","confirm":true,"x":1}`, 400)
+	post("/api/v1/connect/launch", `{"id":"claude","project":"/etc"}`, 409) // no model first
+	if m := post("/api/v1/connect/setup", `{"id":"claude","confirm":true}`, 409); m["error"] != "no_model" {
+		t.Fatalf("%v", m)
+	}
+	if r, _ := e.do(t, "POST", "/api/v1/connect/setup", `{"id":"claude","confirm":true}`, map[string]string{"Cookie": CookieName + "=" + token}); r.StatusCode != 403 {
+		t.Fatalf("Origin required: %d", r.StatusCode)
+	}
+}

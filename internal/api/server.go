@@ -22,6 +22,7 @@ import (
 
 	"github.com/tonynv/aituner/internal/bench"
 	"github.com/tonynv/aituner/internal/canirun"
+	"github.com/tonynv/aituner/internal/connect"
 	"github.com/tonynv/aituner/internal/download"
 	"github.com/tonynv/aituner/internal/gateway"
 	"github.com/tonynv/aituner/internal/hf"
@@ -48,6 +49,7 @@ type Config struct {
 	HF       *hf.Client
 	Ollama   *bench.Ollama
 	Runner   tune.Runner
+	Connect  connect.Runner // runs installs for editor setup; nil = the real one
 	Version  string
 	Log      func(string)
 }
@@ -244,6 +246,10 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("POST /api/v1/serve/runtime", s.handleServeRuntime)
 	api.HandleFunc("POST /api/v1/serve/start", s.handleServeStart)
 	api.HandleFunc("POST /api/v1/serve/stop", s.handleServeStop)
+	api.HandleFunc("GET /api/v1/connect", s.handleConnectList)
+	api.HandleFunc("POST /api/v1/connect/setup", s.handleConnectSetup)
+	api.HandleFunc("POST /api/v1/connect/remove", s.handleConnectRemove)
+	api.HandleFunc("POST /api/v1/connect/launch", s.handleConnectLaunch)
 	api.HandleFunc("GET /api/v1/settings", s.handleGetSettings)
 	api.HandleFunc("PUT /api/v1/settings", s.handlePutSettings)
 	api.HandleFunc("GET /api/v1/downloads", s.handleListDownloads)
