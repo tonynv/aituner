@@ -16,15 +16,15 @@
   import { api } from './lib/api.js';
 
   const MAIN = [
-    { tab: 'hardware', label: 'Hardware', icon: 'cpu' },
-    { tab: 'downloads', label: 'Downloads', icon: 'download' },
-    { tab: 'setup', label: 'Setup', icon: 'server' },
-    { tab: 'monitor', label: 'Monitor', icon: 'activity' },
+    { tab: 'hardware', tile: 'graphite', label: 'Hardware', icon: 'cpu' },
+    { tab: 'downloads', tile: 'blue', label: 'Downloads', icon: 'download' },
+    { tab: 'setup', tile: 'indigo', label: 'Setup', icon: 'server' },
+    { tab: 'monitor', tile: 'green', label: 'Monitor', icon: 'activity' },
   ];
   const PERF = [
-    { tab: 'benchmark', label: 'Benchmark', icon: 'gauge' },
-    { tab: 'tune', label: 'Tune', icon: 'sliders' },
-    { tab: 'rerun', label: 'Re-run', icon: 'refresh' },
+    { tab: 'benchmark', tile: 'orange', label: 'Benchmark', icon: 'gauge' },
+    { tab: 'tune', tile: 'purple', label: 'Tune', icon: 'sliders' },
+    { tab: 'rerun', tile: 'teal', label: 'Re-run', icon: 'refresh' },
   ];
   let theme = $state('system');
   let newRunDialog;
@@ -83,7 +83,7 @@
   <li>
     <button class="item" class:current={app.tab === s.tab} disabled={locked(s.tab)} onclick={() => (app.tab = s.tab)} aria-current={app.tab === s.tab ? 'page' : undefined}
       title={locked(s.tab) ? (s.tab === 'setup' ? 'Download a model first' : 'Available once the earlier performance step has run') : ''}>
-      <Icon name={s.icon} size={16} />
+      <span class="tile" style:background="var(--tile-{s.tile})"><Icon name={s.icon} size={14} /></span>
       <span class="lbl">{s.label}</span>
       {#if locked(s.tab)}<span class="state" aria-label="locked"><Icon name="lock" size={12} /></span>
       {:else if done(s.tab)}<span class="state" aria-label="done"><Icon name="check" size={12} /></span>{/if}
@@ -102,7 +102,7 @@
         <p class="group">Performance<span class="opt">optional</span></p>
         <ul>{#each PERF as s (s.tab)}{@render navItem(s)}{/each}</ul>
         <p class="group">Settings</p>
-        <ul>{@render navItem({ tab: 'storage', label: 'Storage', icon: 'disk' })}</ul>
+        <ul>{@render navItem({ tab: 'storage', tile: 'pink', label: 'Storage', icon: 'disk' })}</ul>
       </nav>
     {/if}
     <div class="foot">
@@ -175,9 +175,13 @@
   .opt { margin-left: 6px; font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--faint); }
   /* sidebar rows behave like buttons: fill on hover, darker while pressed, filled when selected */
   .item { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 32px; padding: 0 8px; border: 0; border-radius: var(--radius); background: transparent; color: var(--text); cursor: pointer; text-align: left; font-size: 14px; transition: background-color 0.1s; }
-  .item:hover:not(:disabled) { background: var(--border); }
-  .item:active:not(:disabled) { background: var(--border-strong); }
-  .item.current { background: var(--border-strong); font-weight: 600; }
+  .item:hover:not(.current):not(:disabled) { background: var(--border); }
+  .item:active:not(.current):not(:disabled) { background: var(--border-strong); }
+  .item.current { background: var(--accent); color: var(--on-accent); font-weight: 600; }
+  .item.current .state { color: var(--on-accent); }
+  /* System Settings-style icon tiles: coloured square, white glyph */
+  .tile { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; flex: none; border-radius: 4px; color: var(--on-tile); }
+  .item:disabled .tile { opacity: 0.45; }
   .item:disabled { cursor: not-allowed; color: var(--faint); }
   .lbl { flex: 1; white-space: nowrap; }
   .state { display: inline-flex; color: var(--muted); }
