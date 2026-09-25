@@ -5,19 +5,24 @@ export const app = $state({
   state: null,
   serve: null, // model-server status, polled with the state so every tab can show it
   error: null, // connection / fatal
-  view: null, // user-selected step; null = follow the server's step
-  report: false, // showing the Report view instead of a step
-  run: false, // showing the Run view (serve a model, connect editors)
+  tab: 'hardware', // what is on screen; every launch starts at the hardware home page
+  detected: false, // this page load has run detection (the server re-detects on request)
   log: [],
   lastSeq: 0,
   busy: false,
 });
 
-// tuned_done stays on step 4 (the comparison); Models is unlocked but the user chooses when to go there
-const PHASE_STEP = { detected: 1, baseline_running: 2, baseline_done: 3, tune_reviewed: 4, tuned_running: 4, tuned_done: 4 };
-export const currentStep = () => (app.state && app.state.phase ? PHASE_STEP[app.state.phase] || 1 : 1);
-export const maxStep = () => (app.state && app.state.recommendations_unlocked ? 5 : currentStep());
-export const activeStep = () => app.view ?? currentStep();
+// Main path: hardware -> downloads -> setup. Benchmark, tune and re-run are an optional performance track that
+// follows the server's phase; a tab unlocks once the run has reached it.
+export const TABS = ['hardware', 'downloads', 'setup', 'benchmark', 'tune', 'rerun', 'report'];
+export const PERF_TABS = ['benchmark', 'tune', 'rerun'];
+const PHASE_TAB = { detected: 'hardware', baseline_running: 'benchmark', baseline_done: 'tune', tune_reviewed: 'rerun', tuned_running: 'rerun', tuned_done: 'rerun' };
+export const phaseTab = () => (app.state && PHASE_TAB[app.state.phase]) || 'hardware';
+export const perfUnlocked = (tab) => {
+  const order = { benchmark: 1, tune: 2, rerun: 3 };
+  const reached = { hardware: 0, benchmark: 1, tune: 2, rerun: 3 }[phaseTab()] ?? 0;
+  return reached >= order[tab];
+};
 export const isRunning = () => !!(app.state && app.state.job && app.state.job.running);
 
 export async function refresh() {

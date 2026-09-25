@@ -84,7 +84,7 @@
       </table>
     </div>
     <div class="row">
-      <button class="btn primary" onclick={onnext}>See what this machine can run <Icon name="arrow" size={16} /></button>
+      <button class="btn primary" onclick={onnext}>Back to downloads <Icon name="arrow" size={16} /></button>
       {#if applied.length}<button class="btn" onclick={revert} disabled={app.busy}>Revert changes</button>{/if}
     </div>
   {/if}

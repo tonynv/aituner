@@ -2,28 +2,21 @@
 
 Benchmark a machine for local AI, tune it, and find out which models it can actually run well.
 
-aituner opens a local web UI and walks through five steps, in order:
+aituner opens a local web UI. **Every launch starts at the Hardware home page and runs detection again**, then walks the main path:
 
-1. **Hardware**: everything about the machine, detected directly. No model suggestions yet.
-2. **Benchmark**: real measurements of memory bandwidth, GPU compute and LLM speed (MLX and Ollama).
-3. **Tune**: a reviewable diff of system changes. Nothing is applied until you approve it.
-4. **Re-run**: the same benchmark again, with a before/after comparison that separates real change from noise.
-5. **Models**: only now does it ask [canirun.ai](https://www.canirun.ai) what fits, resolve each model to an
-   Apple-Silicon (MLX) build that loads on your machine, and estimate its speed from what you measured. Community
-   "unrestricted" (abliterated/uncensored) variants are included by default and can be switched off.
+1. **Hardware**: everything about the machine, detected directly. Click **Next: downloads**.
+2. **Downloads**: canirun.ai-ranked, MLX-optimised models that fit this machine (community "unrestricted" variants included by default). Each shows how your
+   memory budget is used once it loads (weights, runtime, and the room left for KV cache), as a grid or list. **Add to queue** moves a model into the
+   **download queue** at the top of the page; downloads run one at a time, in order, verified file by file and resumable. The download folder is
+   configurable (default `~/Models`). MLX for Mac is installed from here if it is missing.
+3. **Setup**: once a model is downloaded. It installs or updates MLX for Mac, starts the model, shows the connection details, and has a card per tool
+   (**Claude Code, VS Code, Neovim, Vim + tmux**, or any OpenAI-compatible tool). Choosing a tool shows exactly what will be installed and changed, asks once,
+   then installs, configures and verifies it, so you can open your project and start coding. Each tool gets its own isolated profile: your own editor
+   settings and dotfiles are never modified.
 
-Each recommendation shows how your memory budget is used once the model loads (weights, runtime, and the room left for
-KV cache, with the context length that fits), can be viewed as a grid or a list, and has a **Download** button that saves it
-to a folder you choose (default `~/Models`, changeable on the page). Downloads are verified file by file and can be resumed.
-
-After you have a model downloaded there is a sixth view, **Run**: it installs or updates MLX for Mac, starts the model, shows the
-connection details, and has a card per tool (**Claude Code, VS Code, Neovim, Vim + tmux**, or any OpenAI-compatible tool). Choosing a
-tool shows exactly what will be installed and changed, asks once, then installs and configures it and verifies it, so you can open
-your project and start coding. Each tool gets its own isolated profile: your own editor settings and dotfiles are never modified.
-Numbers from every benchmark are pinned across the top of every view, and the **Report** view charts every trial, explains the
-figures, compares runs and exports JSON, Markdown or CSV.
-
-The server enforces this order. Asking for recommendations early returns `409 wrong_phase`.
+An optional **performance track** (Benchmark, Tune, Re-run, Report) measures memory bandwidth, GPU compute and LLM speed (MLX and Ollama), shows a reviewable
+diff of system changes (nothing is applied until you approve it), and re-runs for a before/after comparison that separates real change from noise. Its numbers
+are pinned across the top of every view (from the last measured run until this launch has its own), and they add speed estimates to the model list.
 
 **Status:** macOS on Apple Silicon. Linux is designed for (`internal/platform`) but not implemented; the launcher and
 binary say so plainly instead of pretending. See [`SPECS/SPEC.md`](SPECS/SPEC.md) for the design, measured results and
@@ -42,7 +35,7 @@ then starts aituner. It needs [Homebrew](https://brew.sh) and never uses `sudo`.
 aituner shows a small terminal UI (status, the URL, a live log; `o` opens the browser, `q` quits) and opens your browser.
 Useful flags: `--no-tui` (headless), `--no-open`, `--port N`, `--version`.
 
-The first benchmark installs an isolated Python environment (`mlx`, `mlx-lm`) under
+MLX for Mac installs into an isolated Python environment (`mlx`, `mlx-lm`) under
 `~/Library/Application Support/aituner/` and downloads two small benchmark models (about 4 GB in total, only if
 missing). It lists exactly what it will fetch and asks first.
 

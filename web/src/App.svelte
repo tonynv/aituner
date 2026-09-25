@@ -5,26 +5,29 @@
   import Benchmark from './steps/Benchmark.svelte';
   import Tune from './steps/Tune.svelte';
   import Rerun from './steps/Rerun.svelte';
-  import Models from './steps/Models.svelte';
+  import Downloads from './steps/Downloads.svelte';
   import Report from './steps/Report.svelte';
   import Run from './steps/Run.svelte';
   import PinnedStats from './lib/PinnedStats.svelte';
-  import { app, start, currentStep, activeStep, maxStep, act } from './lib/app.svelte.js';
+  import { app, start, phaseTab, perfUnlocked, PERF_TABS, act } from './lib/app.svelte.js';
   import { api } from './lib/api.js';
 
-  const STEPS = [
-    { n: 1, label: 'Hardware' },
-    { n: 2, label: 'Benchmark' },
-    { n: 3, label: 'Tune' },
-    { n: 4, label: 'Re-run' },
-    { n: 5, label: 'Models' },
+  const MAIN = [
+    { tab: 'hardware', label: 'Hardware' },
+    { tab: 'downloads', label: 'Downloads' },
+    { tab: 'setup', label: 'Setup' },
+  ];
+  const PERF = [
+    { tab: 'benchmark', label: 'Benchmark' },
+    { tab: 'tune', label: 'Tune' },
+    { tab: 'rerun', label: 'Re-run' },
   ];
   let theme = $state('system');
   let newRunDialog;
   async function confirmNewRun() {
     newRunDialog?.close();
     await act(() => api.newRun());
-    app.view = null;
+    app.tab = 'hardware';
   }
   let systemDark = $state(true);
 
@@ -35,6 +38,8 @@
     const onChange = (e) => (systemDark = e.matches);
     mq.addEventListener('change', onChange);
     const stop = start();
+    // every page load runs detection again, then shows the machine
+    api.detect().catch(() => {}).finally(() => { app.detected = true; });
     return () => { mq.removeEventListener('change', onChange); stop(); };
   });
   $effect(() => {
@@ -48,12 +53,30 @@
   }
 
   const st = $derived(app.state);
-  const cur = $derived(currentStep());
-  const max = $derived(maxStep());
-  const active = $derived(activeStep());
   const runReady = $derived(!!app.serve && ((app.serve.models?.length ?? 0) > 0 || app.serve.server?.state !== 'stopped'));
+  const serving = $derived(app.serve?.server?.state === 'running');
   const machine = $derived(st?.hardware ? `${st.hardware.model.name}, ${st.hardware.cpu.chip}` : '');
+  const canReport = $derived(!!(st?.headline?.tuned || st?.headline?.baseline));
+  // the performance track follows the server's phase (benchmark starts -> Benchmark, finishes -> Tune, ...)
+  let lastPhase = null;
+  $effect(() => {
+    const p = st?.phase;
+    if (p && lastPhase && p !== lastPhase && PERF_TABS.includes(app.tab)) app.tab = phaseTab();
+    if (p) lastPhase = p;
+  });
+  const done = (tab) => tab === 'hardware' ? app.detected : tab === 'downloads' ? runReady : tab === 'setup' ? serving : PERF_TABS.includes(tab) && perfUnlocked(tab) && app.tab !== tab && phaseTab() !== tab;
+  const locked = (tab) => tab === 'setup' ? !runReady : PERF_TABS.includes(tab) ? !perfUnlocked(tab) : tab === 'report' ? !canReport : false;
 </script>
+
+{#snippet tabButton(s, n)}
+  <li>
+    <button class="step" class:current={app.tab === s.tab} class:done={done(s.tab)} disabled={locked(s.tab)} onclick={() => (app.tab = s.tab)} aria-current={app.tab === s.tab ? 'step' : undefined}
+      title={locked(s.tab) ? (s.tab === 'setup' ? 'Download a model first' : 'Available once the earlier performance step has run') : ''}>
+      <span class="num">{#if locked(s.tab)}<Icon name="lock" size={12} />{:else if done(s.tab)}<Icon name="check" size={14} />{:else if n}{n}{:else}<Icon name="gauge" size={12} />{/if}</span>
+      <span class="lbl">{s.label}</span>
+    </button>
+  </li>
+{/snippet}
 
 <div class="shell">
   <header>
@@ -69,7 +92,7 @@
   {/if}
 
   {#if st && st.supported}
-    <PinnedStats {st} serve={app.serve} onreport={() => { app.run = false; app.report = !app.report; }} onrun={() => { app.report = false; app.run = true; }} />
+    <PinnedStats {st} serve={app.serve} onreport={() => (app.tab = app.tab === 'report' ? 'hardware' : 'report')} onrun={() => (app.tab = 'setup')} />
   {/if}
 
   {#if st && !st.supported}
@@ -77,30 +100,24 @@
   {:else if st}
     <nav aria-label="Steps">
       <ol>
-        {#each STEPS as s}
-          <li>
-            <button class="step" class:current={!app.report && !app.run && active === s.n} class:done={s.n < cur || (s.n <= max && s.n !== active && s.n < 5)} disabled={s.n > max} onclick={() => { app.report = false; app.run = false; app.view = s.n === cur ? null : s.n; }} aria-current={active === s.n ? 'step' : undefined}>
-              <span class="num">{#if s.n < cur || (s.n <= max && s.n < 5)}<Icon name="check" size={14} />{:else if s.n > max}<Icon name="lock" size={12} />{:else}{s.n}{/if}</span>
-              <span class="lbl">{s.label}</span>
-            </button>
-          </li>
+        {#each MAIN as s, i}
+          {@render tabButton(s, i + 1)}
         {/each}
         <li class="sep" aria-hidden="true"></li>
-        <li>
-          <button class="step" class:current={app.run} disabled={!runReady} onclick={() => { app.report = false; app.run = true; }} title={runReady ? '' : 'Download a model first'}>
-            <span class="num">{#if runReady}<Icon name="server" size={14} />{:else}<Icon name="lock" size={12} />{/if}</span><span class="lbl">Run</span>
-          </button>
-        </li>
+        <li class="group faint" aria-hidden="true">Performance, optional</li>
+        {#each PERF as s}
+          {@render tabButton(s, 0)}
+        {/each}
       </ol>
     </nav>
     <main>
-      {#if app.run}<Run {st} />
-      {:else if app.report}<Report />
-      {:else if active === 1}<Hardware hw={st.hardware} plan={st.bench_plan} phase={st.phase} />
-      {:else if active === 2}<Benchmark {st} />
-      {:else if active === 3}<Tune {st} />
-      {:else if active === 4}<Rerun {st} onnext={() => (app.view = 5)} />
-      {:else if active === 5}<Models {st} />
+      {#if app.tab === 'setup'}<Run {st} />
+      {:else if app.tab === 'report'}<Report />
+      {:else if app.tab === 'downloads'}<Downloads {st} onnext={() => (app.tab = 'setup')} />
+      {:else if app.tab === 'benchmark'}<Benchmark {st} />
+      {:else if app.tab === 'tune'}<Tune {st} />
+      {:else if app.tab === 'rerun'}<Rerun {st} onnext={() => (app.tab = 'downloads')} />
+      {:else}<Hardware hw={st.hardware} plan={st.bench_plan} phase={st.phase} detecting={!app.detected} />
       {/if}
     </main>
   {:else if !app.error}
@@ -110,7 +127,7 @@
 
 <dialog bind:this={newRunDialog} aria-labelledby="nr-title">
   <h3 id="nr-title">Start a new run?</h3>
-  <p class="muted">This starts over from the hardware step. The current results stay saved, but the model recommendations lock again until you benchmark, tune and re-run.</p>
+  <p class="muted">This starts over from the hardware step. The current results stay saved and can still be compared in the report.</p>
   <div class="row end">
     <button class="btn" onclick={() => newRunDialog.close()}>Keep current results</button>
     <button class="btn primary" onclick={confirmNewRun}>Start new run</button>
@@ -131,6 +148,7 @@
   .step .num { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: 1px solid currentColor; border-radius: var(--radius); font-size: 12px; font-variant-numeric: tabular-nums; }
   .step.done .num { background: var(--btn-bg); color: var(--btn-fg); border-color: var(--btn-bg); }
   .sep { width: 1px; background: var(--border-strong); margin: 6px 4px; }
+  .group { align-self: center; font-size: 12px; white-space: nowrap; }
   main { padding-top: 4px; }
   dialog { background: var(--surface); color: var(--text); border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 20px; max-width: min(520px, calc(100vw - 32px)); }
   dialog::backdrop { background: var(--overlay); }

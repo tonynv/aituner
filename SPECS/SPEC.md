@@ -412,3 +412,12 @@ Known gaps:
 ### 16.6 Prompt-cache bound (real-run finding)
 
 `mlx_lm.server` keeps up to 10 reusable prompts and, by default, no byte limit. During a real Claude Code run (large, varying ~15K-token prompts) the log showed `Prompt Cache: 9 sequences, 19.28 GB` on a 32 GB machine. aituner now starts the server with `--prompt-cache-size 4` and `--prompt-cache-bytes` = RAM/8 clamped to 1-6 GiB (4 GiB on the reference machine). Verified live: with 7K-token distinct prompts the log shows `1 sequences, 2.17 GB` (older entries evicted). Known limitation: `message_start` carries `input_tokens: 0` because `mlx_lm.server` reports usage only in its final chunk; the final `message_delta` carries the real counts.
+
+### 16.7 Flow change: detect, downloads, setup (owner request)
+
+Supersedes the earlier rule that recommendations unlock only after tune and re-run. Now:
+- Every launch creates a fresh run (`ensureRun(force)`) and the UI runs detection on every page load; the app always opens on the Hardware page.
+- `GET /recommendations` works in any phase. Speed estimates are included only if the run has measurements (tuned, else baseline); otherwise models are ranked on fit alone. It needs the MLX runtime (409 `no_runtime`, and the Downloads page offers the install).
+- Downloads are a server-side queue (`download.Manager.Enqueue`): one at a time, FIFO, a failed start is recorded and skipped, a waiting item can be removed; state `queued` with `position`. Only repos the recommender offered are accepted (403 `not_offered`).
+- UI: Hardware -> Downloads (queue panel at the top) -> Setup (unlocks after a model is downloaded). Benchmark, Tune and Re-run are an optional track that follows the server phase.
+- Pinned stats fall back to the newest earlier measured run (`headline_from`) and are labelled as such.

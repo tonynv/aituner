@@ -33,3 +33,11 @@ Legend: [x] done, [~] partial, [ ] not done. Build order: DataStore -> API -> UI
 - D1: SQLite has no RLS (app-level tenant scoping + isolation test). Accept, or switch to local PostgreSQL?
 - Approve the macOS admin dialog once to exercise the wired-limit apply (the only path not run end to end)
 - Cut v0.1.0 (annotated tag, no attribution) and merge build/v0.1 into main when satisfied
+
+## P12 Flow: detect -> downloads (queue) -> setup
+- [x] Fresh run + detection on every launch; home page is Hardware
+- [x] Recommendations and downloads available right after detection (no benchmark gate)
+- [x] Server-side download queue (ordered, one at a time, remove/retry) + queue panel at top of Downloads
+- [x] Shared MLX install card on Downloads and Setup; Setup unlocks after a download
+- [x] Pinned stats fall back to the last measured run
+- [ ] Re-run QA (tonynv-qa) on the new flow, dark/light, mobile viewport

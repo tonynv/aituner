@@ -5,7 +5,7 @@
   import Icon from './Icon.svelte';
 
   // A normalized model (candidate or variant). layout: 'grid' card or 'list' row.
-  let { m, layout = 'grid', dl, anyActive, blocked, onchange, children } = $props();
+  let { m, layout = 'grid', dl, blocked, onchange, children } = $props();
 </script>
 
 <article class="entry {layout}">
@@ -27,7 +27,7 @@
 
   <div class="actions stack tight">
     {#if m.repo}
-      <DownloadControl repo={m.repo} status={dl?.[m.repo]} {anyActive} {blocked} {onchange} />
+      <DownloadControl repo={m.repo} status={dl?.[m.repo]} {blocked} {onchange} />
     {/if}
     {#if m.run && dl?.[m.repo]?.state !== 'done'}
       <details class="cmdwrap">

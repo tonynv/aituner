@@ -2,10 +2,11 @@
   import Icon from '../lib/Icon.svelte';
   import LogPanel from '../lib/LogPanel.svelte';
   import Progress from '../lib/Progress.svelte';
+  import RuntimeCard from '../lib/RuntimeCard.svelte';
   import Copyable from '../lib/Copyable.svelte';
   import IntegrationCard from '../lib/IntegrationCard.svelte';
   import { api } from '../lib/api.js';
-  import { app, act, refresh } from '../lib/app.svelte.js';
+  import { app, refresh } from '../lib/app.svelte.js';
   import { fmtBytes, fmtTokens } from '../lib/format.js';
 
   let { st } = $props();
@@ -59,7 +60,6 @@
     return () => { stop = true; clearTimeout(t); };
   });
 
-  async function installRuntime() { err = ''; try { await act(() => api.serveRuntime()); } catch (e) { err = e.message; } }
   async function start() {
     err = ''; busy = true; lines = []; after = 0;
     try { await api.serveStart(repo, maxTokens, kvBits); await load(); } catch (e) { err = e.message; } finally { busy = false; }
@@ -75,29 +75,11 @@
 
 <div class="stack">
   <div>
-    <h2>Run a model</h2>
+    <h2>Set up and run</h2>
     <p class="muted">Start one of your downloaded models, then connect your editor: aituner installs and configures it for you. Everything stays on this Mac.</p>
   </div>
 
-  <section class="card stack tight" aria-label="MLX for Mac">
-    <div class="row between">
-      <div class="row"><Icon name="cpu" /><h3>MLX for Mac</h3></div>
-      {#if rt?.ready}<span class="badge ok"><Icon name="check" size={12} /> installed</span>{:else}<span class="badge warn">not installed</span>{/if}
-    </div>
-    {#if rt?.ready}
-      <p class="muted">mlx <span class="mono">{rt.mlx_version}</span> · mlx-lm <span class="mono">{rt.mlx_lm_version}</span> · Python <span class="mono">{rt.python_version}</span>. Runs models on the Apple GPU through Metal.</p>
-    {:else}
-      <p class="muted">MLX is Apple's machine-learning framework for Apple Silicon. aituner installs it, with mlx-lm (the model runner), into its own isolated Python environment. No system Python is changed.</p>
-    {/if}
-    <div class="row">
-      <button class="btn {rt?.ready ? '' : 'primary'}" onclick={installRuntime} disabled={jobRunning || live || busy}>
-        <Icon name={rt?.ready ? 'refresh' : 'download'} size={16} /> {rt?.ready ? 'Update MLX' : 'Install MLX for Mac'}
-      </button>
-      {#if live}<span class="faint small">Stop the model to update MLX.</span>{/if}
-    </div>
-    {#if st.job?.running && st.job.kind === 'runtime'}<Progress value={st.job.progress ?? 0} label="Installing MLX" /><LogPanel kinds={['runtime']} />{/if}
-    {#if st.job?.error && st.job.kind === 'runtime'}<p class="bad" role="alert"><Icon name="alert" size={16} /> {st.job.error}</p>{/if}
-  </section>
+  <RuntimeCard {st} {rt} disabled={live || busy} note="Stop the model to update MLX." />
 
   <section class="card stack tight" aria-label="Model server">
     <div class="row between">

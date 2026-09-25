@@ -2,10 +2,13 @@
   import { onMount } from 'svelte';
   import Icon from '../lib/Icon.svelte';
   import ModelEntry from '../lib/ModelEntry.svelte';
+  import RuntimeCard from '../lib/RuntimeCard.svelte';
+  import DownloadQueue from '../lib/DownloadQueue.svelte';
+  import { app } from '../lib/app.svelte.js';
   import { api } from '../lib/api.js';
   import { fmtBytes } from '../lib/format.js';
 
-  let { st } = $props();
+  let { st, onnext } = $props();
   let data = $state(null);
   let err = $state('');
   let loading = $state(false);
@@ -40,7 +43,9 @@
     loading = true; err = '';
     try { data = await api.recommendations(unrestricted); } catch (e) { err = e.message; } finally { loading = false; }
   }
-  $effect(() => { if (st.recommendations_unlocked && !data && !loading && !err) load(); });
+  const mlxReady = $derived(!!st.hardware?.software?.mlx?.ready);
+  const ready = $derived(Object.values(dl).some((i) => i.state === 'done') || (app.serve?.models?.length ?? 0) > 0);
+  $effect(() => { if (mlxReady && !data && !loading && !err) load(); });
 
   async function refreshDownloads() {
     try {
@@ -52,7 +57,6 @@
   async function loadSettings() { try { settings = await api.settings(); } catch { /* shown by the shell */ } }
 
   $effect(() => {
-    if (!st.recommendations_unlocked) return;
     loadSettings();
     refreshDownloads();
     let stop = false, t;
@@ -93,8 +97,8 @@
 <div class="stack">
   <div class="row between head">
     <div>
-      <h2>What this machine can run</h2>
-      <p class="muted">Sized to your tuned memory, ranked by canirun.ai fit, resolved to Apple-Silicon (MLX) builds that actually load here, with speeds calibrated to what you measured.</p>
+      <h2>Choose models to download</h2>
+      <p class="muted">Ranked by canirun.ai fit for this machine and resolved to Apple-Silicon (MLX) builds that load here. Add the ones you want: they move into the queue below and download one at a time.</p>
     </div>
     <div class="row controls">
       <div class="seg" role="group" aria-label="Layout">
@@ -107,6 +111,21 @@
       </label>
     </div>
   </div>
+
+  <DownloadQueue items={dl} onchange={refreshDownloads} />
+
+  <div class="card cta">
+    <div>
+      <h3>Next: set up and run</h3>
+      <p class="muted">{ready ? 'Install the runtime, start a downloaded model and connect your editor. You can keep adding to the queue meanwhile.' : 'Available once one model has finished downloading.'}</p>
+    </div>
+    <button class="btn primary" onclick={onnext} disabled={!ready}>Continue to setup <Icon name="arrow" size={16} /></button>
+  </div>
+
+  {#if !mlxReady}
+    <RuntimeCard {st} rt={app.serve?.runtime} />
+    <p class="muted">Install MLX first: it is needed to check which models load on this Mac and to download them.</p>
+  {/if}
 
   {#if settings}
     <section class="card folder" aria-label="Download folder">
@@ -144,7 +163,8 @@
 
   {#if data}
     <p class="muted">
-      Memory budget {data.budget_gb.toFixed(1)} GB. Speed estimate = measured bandwidth scaled to each model's size (calibration {Math.round(data.efficiency * 100)}%). The bar under each model shows how that budget is used once it loads, and how much KV cache (context) still fits. Estimates only; MoE speeds ignore routing overhead.
+      Memory budget {data.budget_gb.toFixed(1)} GB. The bar under each model shows how that budget is used once it loads, and how much KV cache (context) still fits.
+      {#if data.efficiency > 0}Speed estimate = measured bandwidth scaled to each model's size (calibration {Math.round(data.efficiency * 100)}%). Estimates only; MoE speeds ignore routing overhead.{:else}No speed estimates yet: benchmark this machine (optional, in the performance tabs) and they appear here.{/if}
     </p>
     {#each CATS as c}
       {#if data.groups[c.key]?.length}
@@ -154,14 +174,14 @@
           <div class={layout === 'grid' ? 'grid' : 'listwrap'}>
             {#each data.groups[c.key] as raw (raw.model_id)}
               {@const m = candidate(raw)}
-              <ModelEntry {m} {layout} {dl} {anyActive} {blocked} onchange={refreshDownloads}>
+              <ModelEntry {m} {layout} {dl} {blocked} onchange={refreshDownloads}>
                 {#snippet children()}
                   {#if raw.variants?.length}
                     <details class="variants">
                       <summary>{raw.variants.length} unrestricted variant{raw.variants.length > 1 ? 's' : ''}</summary>
                       <div class="vlist">
                         {#each raw.variants as v (v.repo)}
-                          <ModelEntry m={variant(v)} layout="list" {dl} {anyActive} {blocked} onchange={refreshDownloads} />
+                          <ModelEntry m={variant(v)} layout="list" {dl} {blocked} onchange={refreshDownloads} />
                         {/each}
                       </div>
                     </details>
@@ -195,6 +215,7 @@
   .seg button.on { background: var(--btn-bg); color: var(--btn-fg); }
   .toggle { display: flex; align-items: center; gap: 10px; min-height: var(--tap); cursor: pointer; }
   .toggle input { width: 20px; height: 20px; accent-color: var(--text); }
+  .cta { display: flex; justify-content: space-between; gap: 16px; align-items: center; flex-wrap: wrap; }
   .folder { display: grid; gap: 10px; }
   .where { align-items: flex-start; flex-wrap: nowrap; min-width: 0; flex: 1; }
   .path-info { min-width: 0; flex: 1; }

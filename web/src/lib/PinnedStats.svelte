@@ -13,8 +13,8 @@
     { key: 'ollama_generation_tps', metric: 'llm/ollama/generation_tps', label: 'Ollama generate', unit: 'tok/s' },
   ];
   const head = $derived(st.headline?.tuned ?? st.headline?.baseline ?? null);
-  const stage = $derived(st.headline?.tuned ? 'after tuning' : st.headline?.baseline ? 'baseline' : '');
-  const rows = $derived(Object.fromEntries((st.compare ?? []).map((r) => [r.key, r])));
+  const stage = $derived(st.headline_from ? 'last measured run' : st.headline?.tuned ? 'after tuning' : st.headline?.baseline ? 'baseline' : '');
+  const rows = $derived(Object.fromEntries((st.headline_from ? [] : st.compare ?? []).map((r) => [r.key, r])));
   const chips = $derived(CHIPS.filter((c) => head && head[c.key] > 0).map((c) => ({ ...c, value: head[c.key], cmp: rows[c.metric] })));
   const pw = $derived(st.hardware?.power);
   const health = $derived(!pw ? '' : pw.source === 'battery' ? 'Battery' : pw.thermal_note?.includes('No thermal') ? 'AC, cool' : pw.source === 'ac' ? 'AC' : '');
@@ -43,7 +43,7 @@
   </div>
   <div class="tail">
     {#if serve && serve.server && serve.server.state !== 'stopped'}
-      <button class="chip serving" onclick={onrun} title="Open the Run view: {serve.server.repo}" aria-label="Model {serve.server.state}: {serve.server.repo}">
+      <button class="chip serving" onclick={onrun} title="Open Setup: {serve.server.repo}" aria-label="Model {serve.server.state}: {serve.server.repo}">
         <span class="l">Model</span>
         <span class="v">{serve.server.state === 'running' ? 'running' : serve.server.state === 'starting' ? 'loading' : serve.server.state}<span class="u"> {serve.server.repo?.split('/').pop()}</span></span>
       </button>

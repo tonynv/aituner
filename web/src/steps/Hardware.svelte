@@ -4,7 +4,7 @@
   import { app, act } from '../lib/app.svelte.js';
   import { api } from '../lib/api.js';
 
-  let { hw, plan, phase } = $props();
+  let { hw, plan, phase, detecting = false } = $props();
   let dialog;
   let err = $state('');
 
@@ -14,7 +14,7 @@
   async function run(confirm) {
     err = '';
     dialog?.close();
-    try { await act(() => api.benchmark(confirm)); } catch (e) { err = e.message; }
+    try { await act(() => api.benchmark(confirm)); app.tab = 'benchmark'; } catch (e) { err = e.message; }
   }
   function click() { needsConfirm ? dialog.showModal() : run(false); }
   async function redetect() { err = ''; try { await act(() => api.detect()); } catch (e) { err = e.message; } }
@@ -23,8 +23,10 @@
 <div class="stack">
   <div>
     <h2>This machine</h2>
-    <p class="muted">Detected directly from the hardware. No model suggestions yet: those come after benchmarking and tuning, so they reflect what this machine actually does.</p>
+    <p class="muted">{detecting ? 'Detecting the hardware…' : 'Detected directly from the hardware, fresh on every launch.'}</p>
   </div>
+
+  {#if !detecting}
 
   <div class="grid">
     <section class="card">
@@ -88,18 +90,25 @@
     </section>
   </div>
 
-  {#if phase === 'detected'}
-    <div class="card cta">
-      <div>
-        <h3>Next: measure real AI performance</h3>
-        <p class="muted">Runs memory, GPU and LLM benchmarks (about 2 minutes). This is the baseline that tuning is judged against.</p>
-      </div>
-      <div class="row">
-        <button class="btn" onclick={redetect} disabled={app.busy}><Icon name="refresh" size={16} /> Re-detect</button>
-        <button class="btn primary" onclick={click} disabled={app.busy}><Icon name="play" size={16} /> Run benchmark</button>
-      </div>
-      {#if err}<p class="bad" role="alert">{err}</p>{/if}
+  <div class="card cta">
+    <div>
+      <h3>Next: choose models to download</h3>
+      <p class="muted">Pick models that fit this machine and queue them. Then set up MLX and connect your editor.</p>
     </div>
+    <div class="row">
+      <button class="btn" onclick={redetect} disabled={app.busy}><Icon name="refresh" size={16} /> Re-detect</button>
+      <button class="btn primary" onclick={() => (app.tab = 'downloads')}>Next: downloads <Icon name="arrow" size={16} /></button>
+    </div>
+  </div>
+
+  {#if phase === 'detected'}
+    <details class="card optional">
+      <summary><Icon name="gauge" size={16} /> Optional: benchmark this machine</summary>
+      <p class="muted">Runs memory, GPU and LLM benchmarks (about 2 minutes). It pins real numbers on every tab, adds speed estimates to the model list, and is the baseline that tuning is judged against.</p>
+      <div class="row"><button class="btn" onclick={click} disabled={app.busy}><Icon name="play" size={16} /> Run benchmark</button></div>
+    </details>
+  {/if}
+  {#if err}<p class="bad" role="alert">{err}</p>{/if}
   {/if}
 </div>
 
@@ -119,7 +128,9 @@
   .head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; color: var(--muted); }
   .head h3 { color: var(--text); }
   .cta { display: flex; justify-content: space-between; gap: 16px; align-items: center; flex-wrap: wrap; }
-  .bad { color: var(--bad); flex-basis: 100%; }
+  .bad { color: var(--bad); }
+  .optional summary { display: flex; align-items: center; gap: 8px; min-height: var(--tap); cursor: pointer; }
+  .optional p { margin: 8px 0 12px; }
   dialog { background: var(--surface); color: var(--text); border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 20px; max-width: min(520px, calc(100vw - 32px)); }
   dialog::backdrop { background: var(--overlay); }
   dialog ul { padding-left: 18px; margin: 12px 0 20px; display: grid; gap: 8px; }
