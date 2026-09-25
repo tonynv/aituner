@@ -91,7 +91,7 @@ func (e *env) authed(extra map[string]string) map[string]string {
 
 func TestUnauthenticatedRefused(t *testing.T) {
 	e := newEnv(t)
-	for _, p := range []string{"/api/v1/state", "/api/v1/health", "/api/v1/monitor", "/api/v1/recommendations", "/api/v1/tune/plan", "/api/v1/events"} {
+	for _, p := range []string{"/api/v1/state", "/api/v1/health", "/api/v1/monitor", "/api/v1/services", "/api/v1/bootstrap", "/api/v1/storage", "/api/v1/reset", "/api/v1/recommendations", "/api/v1/tune/plan", "/api/v1/events"} {
 		if r, _ := e.do(t, "GET", p, "", nil); r.StatusCode != 401 {
 			t.Errorf("%s: %d", p, r.StatusCode)
 		}
@@ -468,6 +468,36 @@ func TestStorageFoldersSaveAndReveal(t *testing.T) {
 	st = e.json(t, "PUT", "/api/v1/storage/reports", `{"dir":""}`, 200)
 	if st["reports"].(map[string]any)["is_default"] != true {
 		t.Fatal("empty did not reset to the default")
+	}
+}
+
+func TestServicesAndBootstrapPlan(t *testing.T) {
+	e := newEnv(t)
+	sv := e.json(t, "GET", "/api/v1/services", "", 200)["services"].([]any)
+	ids := map[string]map[string]any{}
+	for _, x := range sv {
+		m := x.(map[string]any)
+		ids[m["id"].(string)] = m
+	}
+	for _, id := range []string{"mlx", "model", "gateway", "macmon", "ollama"} {
+		if ids[id] == nil {
+			t.Fatalf("missing %s: %v", id, sv)
+		}
+	}
+	if ids["model"]["active"] != false || ids["gateway"]["active"] != false {
+		t.Fatalf("nothing is served in a test: %v", sv)
+	}
+	// the temp data dir has no MLX environment: bootstrap offers to install it
+	plan := e.json(t, "GET", "/api/v1/bootstrap", "", 200)
+	steps := plan["steps"].([]any)
+	if len(steps) != 2 || steps[0].(map[string]any)["id"] != "mlx" || steps[0].(map[string]any)["action"] != "install" {
+		t.Fatalf("%v", plan)
+	}
+	if r, _ := e.do(t, "POST", "/api/v1/bootstrap", `{}`, e.authed(nil)); r.StatusCode != 400 {
+		t.Fatalf("bootstrap without confirmation: %d", r.StatusCode)
+	}
+	if r, _ := e.do(t, "POST", "/api/v1/bootstrap", `{"confirm":true,"x":1}`, e.authed(nil)); r.StatusCode != 400 {
+		t.Fatalf("unknown field accepted: %d", r.StatusCode)
 	}
 }
 

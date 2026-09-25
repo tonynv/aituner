@@ -135,6 +135,13 @@ func (m *Monitor) Want(ctx context.Context) {
 	}
 }
 
+// Active reports whether sampling is running now, and from which source.
+func (m *Monitor) Active() (bool, string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.running, m.source
+}
+
 // Since returns the samples newer than seq (all of them for seq 0), and the current source.
 func (m *Monitor) Since(seq int64) ([]Sample, string) {
 	m.mu.Lock()
