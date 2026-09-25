@@ -35,6 +35,7 @@ const (
 	State_Done    = "done"
 	State_Error   = "error"
 	State_Cancel  = "cancelled"
+	State_Queued  = "queued"
 )
 
 var (
@@ -64,6 +65,7 @@ type Status struct {
 	Error      string  `json:"error,omitempty"`
 	StartedAt  int64   `json:"started_at,omitempty"`
 	FinishedAt int64   `json:"finished_at,omitempty"`
+	Position   int     `json:"position,omitempty"` // 1 = next to start (queued only)
 }
 
 type marker struct {
@@ -79,6 +81,18 @@ type Manager struct {
 	mu     sync.Mutex
 	active *run
 	last   map[string]Status // finished this session (errors, cancels)
+
+	queue    []queued // waiting, in order; the head starts when the running download ends
+	starting *queued  // taken from the queue, being planned (network) before it becomes active
+	// start is what the queue calls for the next item; New sets it to Start.
+	start func(ctx context.Context, mlx bench.MLX, repo, root string) (Status, error)
+}
+
+type queued struct {
+	ctx  context.Context
+	mlx  bench.MLX
+	repo string
+	root string
 }
 
 type run struct {
@@ -86,7 +100,11 @@ type run struct {
 	st     Status
 }
 
-func New(c *hf.Client) *Manager { return &Manager{HF: c, last: map[string]Status{}} }
+func New(c *hf.Client) *Manager {
+	m := &Manager{HF: c, last: map[string]Status{}}
+	m.start = m.Start
+	return m
+}
 
 // Plan is what a download will do, computed before anything is written.
 type Plan struct {
@@ -226,6 +244,82 @@ func (m *Manager) finish(r *run, state, errMsg string) {
 	m.last[r.st.Repo] = r.st
 	m.active = nil
 	r.cancel()
+	go m.pump()
+}
+
+// Enqueue adds repo to the download queue. Items run one at a time, in order. A repo that is already running,
+// waiting or complete is not added twice. The returned status is "queued" (or done, if it is already on disk).
+func (m *Manager) Enqueue(parent context.Context, mlx bench.MLX, repo, root string) (Status, error) {
+	dest, err := modeldir.Dest(root, repo)
+	if err != nil {
+		return Status{}, err
+	}
+	if n, ok := Complete(dest, repo); ok {
+		return Status{Repo: repo, Dest: dest, State: State_Done, BytesDone: n, BytesTotal: n}, nil
+	}
+	m.mu.Lock()
+	if m.active != nil && m.active.st.Repo == repo {
+		st := m.active.st
+		m.mu.Unlock()
+		return st, nil
+	}
+	if pos := m.positionLocked(repo); pos > 0 {
+		m.mu.Unlock()
+		return Status{Repo: repo, Dest: dest, State: State_Queued, Position: pos}, nil
+	}
+	m.queue = append(m.queue, queued{ctx: parent, mlx: mlx, repo: repo, root: root})
+	delete(m.last, repo)
+	pos := m.positionLocked(repo)
+	m.mu.Unlock()
+	go m.pump()
+	return Status{Repo: repo, Dest: dest, State: State_Queued, Position: pos}, nil
+}
+
+// positionLocked is 1-based (the item being planned counts as 1), or 0 if repo is not waiting.
+func (m *Manager) positionLocked(repo string) int {
+	n := 0
+	if m.starting != nil {
+		n++
+		if m.starting.repo == repo {
+			return n
+		}
+	}
+	for _, q := range m.queue {
+		n++
+		if q.repo == repo {
+			return n
+		}
+	}
+	return 0
+}
+
+// pump starts the head of the queue when nothing is running. A start that fails (bad listing, full disk) is
+// recorded against that repo and the queue moves on.
+func (m *Manager) pump() {
+	for {
+		m.mu.Lock()
+		if m.active != nil || m.starting != nil || len(m.queue) == 0 {
+			m.mu.Unlock()
+			return
+		}
+		q := m.queue[0]
+		m.queue = m.queue[1:]
+		m.starting = &q
+		m.mu.Unlock()
+
+		_, err := m.start(q.ctx, q.mlx, q.repo, q.root)
+
+		m.mu.Lock()
+		m.starting = nil
+		if err != nil {
+			dest, _ := modeldir.Dest(q.root, q.repo)
+			m.last[q.repo] = Status{Repo: q.repo, Dest: dest, State: State_Error, Error: cleanErr(err), FinishedAt: time.Now().UnixMilli()}
+		}
+		m.mu.Unlock()
+		if err == nil {
+			return // now active; its finish pumps the next one
+		}
+	}
 }
 
 func (m *Manager) work(ctx context.Context, mlx bench.MLX, r *run, plan Plan) {
@@ -296,9 +390,18 @@ func human(b int64) string {
 }
 
 // Cancel stops the running download for repo. Partial files are kept so a later attempt resumes.
+// A waiting download is removed from the queue.
 func (m *Manager) Cancel(repo string) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	for i, q := range m.queue {
+		if q.repo == repo {
+			m.queue = append(m.queue[:i:i], m.queue[i+1:]...)
+			dest, _ := modeldir.Dest(q.root, q.repo)
+			m.last[repo] = Status{Repo: repo, Dest: dest, State: State_Cancel, FinishedAt: time.Now().UnixMilli()}
+			return true
+		}
+	}
 	if m.active != nil && m.active.st.Repo == repo {
 		m.active.cancel()
 		return true
@@ -310,7 +413,7 @@ func (m *Manager) Cancel(repo string) bool {
 func (m *Manager) Active() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.active != nil
+	return m.active != nil || m.starting != nil || len(m.queue) > 0
 }
 
 // List returns the running download, this session's finished ones, and completed downloads found on disk under
@@ -340,6 +443,14 @@ func (m *Manager) List(root string) []Status {
 	}
 	if m.active != nil {
 		byRepo[m.active.st.Repo] = m.active.st
+	}
+	for _, q := range m.queue {
+		dest, _ := modeldir.Dest(q.root, q.repo)
+		byRepo[q.repo] = Status{Repo: q.repo, Dest: dest, State: State_Queued, Position: m.positionLocked(q.repo)}
+	}
+	if m.starting != nil {
+		dest, _ := modeldir.Dest(m.starting.root, m.starting.repo)
+		byRepo[m.starting.repo] = Status{Repo: m.starting.repo, Dest: dest, State: State_Queued, Position: 1}
 	}
 	m.mu.Unlock()
 	out := make([]Status, 0, len(byRepo))

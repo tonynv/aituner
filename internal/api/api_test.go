@@ -212,14 +212,11 @@ func getState(t *testing.T, e *env) StateResp {
 	return st
 }
 
-func TestStateShowsRealHardwareAndNoRecommendations(t *testing.T) {
+func TestStateShowsRealHardware(t *testing.T) {
 	e := newEnv(t)
 	st := getState(t, e)
 	if !st.Supported || st.Phase != store.PhaseDetected || st.Hardware == nil || st.Hardware.CPU.Chip == "" || st.Hardware.Memory.TotalBytes == 0 {
 		t.Fatalf("state: %+v", st)
-	}
-	if st.Unlocked {
-		t.Fatal("recommendations must be locked at the start")
 	}
 	if st.BenchPlan.Stage != "baseline" || len(st.BenchPlan.Downloads) == 0 {
 		t.Fatalf("temp data dir has no runtime, so downloads must be listed: %+v", st.BenchPlan)
@@ -228,7 +225,7 @@ func TestStateShowsRealHardwareAndNoRecommendations(t *testing.T) {
 
 func TestPhaseGates(t *testing.T) {
 	e := newEnv(t)
-	for _, c := range []struct{ m, p string }{{"GET", "/api/v1/recommendations"}, {"GET", "/api/v1/tune/plan"}, {"POST", "/api/v1/tune/apply"}} {
+	for _, c := range []struct{ m, p string }{{"GET", "/api/v1/tune/plan"}, {"POST", "/api/v1/tune/apply"}} {
 		body := ""
 		if c.m == "POST" {
 			body = `{"keys":[]}`
@@ -425,7 +422,7 @@ func TestSettingsDefaultValidationAndReset(t *testing.T) {
 	}
 }
 
-func TestDownloadsAreGatedAndRestrictedToOfferedRepos(t *testing.T) {
+func TestDownloadsAreRestrictedToOfferedRepos(t *testing.T) {
 	e := newEnv(t)
 	post := func(repo string, want int) map[string]any {
 		body, _ := json.Marshal(map[string]string{"repo": repo})
@@ -434,16 +431,7 @@ func TestDownloadsAreGatedAndRestrictedToOfferedRepos(t *testing.T) {
 	for _, bad := range []string{"", "noslash", "a/b; rm -rf ~", "../../etc/passwd", "a/b c"} {
 		post(bad, 400) // never reaches any lookup
 	}
-	post("mlx-community/Qwen3-8B-4bit", 409) // valid, but the run is not finished: wrong_phase
-	ctx := context.Background()
-	run, _ := e.s.tn.LatestRun(ctx)
-	for _, s := range [][2]string{{store.PhaseDetected, store.PhaseBaselineRunning}, {store.PhaseBaselineRunning, store.PhaseBaselineDone},
-		{store.PhaseBaselineDone, store.PhaseTuneReviewed}, {store.PhaseTuneReviewed, store.PhaseTunedRunning}, {store.PhaseTunedRunning, store.PhaseTunedDone}} {
-		if err := e.s.tn.SetPhase(ctx, run.ID, s[0], s[1], ""); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if m := post("mlx-community/Qwen3-8B-4bit", 403); m["error"] != "not_offered" { // finished, but never recommended
+	if m := post("mlx-community/Qwen3-8B-4bit", 403); m["error"] != "not_offered" { // never recommended
 		t.Fatalf("%v", m)
 	}
 	e.s.rememberOffered(&reco.Output{Groups: map[string][]reco.Candidate{"code": {{Runtime: "mlx", Repo: "mlx-community/Qwen3-8B-4bit",
@@ -668,5 +656,40 @@ func TestConnectEndpointsAreGatedAndPlansAreComplete(t *testing.T) {
 	}
 	if r, _ := e.do(t, "POST", "/api/v1/connect/setup", `{"id":"claude","confirm":true}`, map[string]string{"Cookie": CookieName + "=" + token}); r.StatusCode != 403 {
 		t.Fatalf("Origin required: %d", r.StatusCode)
+	}
+}
+
+// Models are offered right after detection (no benchmark needed); without an MLX runtime the API says so
+// rather than pretending, and a download of a repo that was never offered is refused.
+func TestRecommendationsAndDownloadsNeedRuntimeNotBenchmark(t *testing.T) {
+	e := newEnv(t)
+	r, b := e.do(t, "GET", "/api/v1/recommendations", "", e.authed(nil))
+	if r.StatusCode != 409 || !strings.Contains(string(b), "no_runtime") {
+		t.Fatalf("recommendations: %d %s", r.StatusCode, b)
+	}
+	r, b = e.do(t, "POST", "/api/v1/downloads", `{"repo":"mlx-community/never-offered"}`, e.authed(nil))
+	if r.StatusCode != 403 || !strings.Contains(string(b), "not_offered") {
+		t.Fatalf("download: %d %s", r.StatusCode, b)
+	}
+}
+
+// Every launch starts a fresh run, so the pinned numbers fall back to the newest earlier run that was measured
+// (and say so) instead of going blank; once the new run has its own measurements they take over.
+func TestPinnedStatsFallBackToPreviousRun(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	r1, _ := e.s.tn.LatestRun(ctx)
+	seed(t, e, r1.ID, "baseline", 100)
+	if err := e.s.ensureRun(ctx, true); err != nil {
+		t.Fatal(err)
+	}
+	st := getState(t, e)
+	if st.Phase != store.PhaseDetected || st.Headline["baseline"].MLXGen != 100 || st.HeadlineFrom == 0 {
+		t.Fatalf("fallback: phase=%s %+v from=%d", st.Phase, st.Headline, st.HeadlineFrom)
+	}
+	r2, _ := e.s.tn.LatestRun(ctx)
+	seed(t, e, r2.ID, "baseline", 120)
+	if st = getState(t, e); st.Headline["baseline"].MLXGen != 120 || st.HeadlineFrom != 0 {
+		t.Fatalf("own measurements must win: %+v from=%d", st.Headline, st.HeadlineFrom)
 	}
 }

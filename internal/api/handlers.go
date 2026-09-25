@@ -51,10 +51,12 @@ type StateResp struct {
 	Warnings  map[string][]string        `json:"warnings"`
 	Changes   []store.TuneChange         `json:"tune_changes"`
 	BenchPlan BenchPlan                  `json:"bench_plan"`
-	Unlocked  bool                       `json:"recommendations_unlocked"`
 	Headline  map[string]report.Headline `json:"headline"`
-	BudgetGB  float64                    `json:"budget_gb"`
-	Serving   *servingBrief              `json:"serving,omitempty"`
+	// HeadlineFrom is set when this run has no measurements yet and the pinned numbers come from an earlier run
+	// (its creation time, ms). A fresh launch starts a new run, so without this the pinned stats would be empty.
+	HeadlineFrom int64         `json:"headline_from,omitempty"`
+	BudgetGB     float64       `json:"budget_gb"`
+	Serving      *servingBrief `json:"serving,omitempty"`
 }
 
 func toMetrics(rs []store.Result, stage string) []bench.Metric { return report.MetricsFrom(rs, stage) }
@@ -160,13 +162,17 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		resp.Changes = cs
 	}
 	resp.BenchPlan = s.benchPlan(hw, run.Phase)
-	resp.Unlocked = run.Phase == store.PhaseTunedDone
 	resp.Headline = map[string]report.Headline{}
 	if len(resp.Baseline) > 0 {
 		resp.Headline["baseline"] = report.HeadlineOf(resp.Baseline)
 	}
 	if len(resp.Tuned) > 0 {
 		resp.Headline["tuned"] = report.HeadlineOf(resp.Tuned)
+	}
+	if len(resp.Headline) == 0 {
+		if prev, at := s.previousMeasured(r.Context(), run.ID); prev != nil {
+			resp.Headline, resp.HeadlineFrom = prev, at
+		}
 	}
 	resp.BudgetGB = s.budgetGB(r.Context(), run.ID, hw)
 	if ss := s.serve.Status(); ss.State != serve.StateStopped {
@@ -482,14 +488,11 @@ func median(m []bench.Metric, suite, engine, name string) float64 {
 	return 0
 }
 
-// handleRecommendations is the ONLY place model suggestions are produced, and only after the tuned benchmark.
+// handleRecommendations produces model suggestions once hardware is detected. Speed estimates are added only
+// when this run has measurements (tuned, else baseline); otherwise models are ranked on fit alone.
 func (s *Server) handleRecommendations(w http.ResponseWriter, r *http.Request) {
 	run, ok := s.runOr501(w, r)
 	if !ok {
-		return
-	}
-	if run.Phase != store.PhaseTunedDone {
-		writeErr(w, http.StatusConflict, "wrong_phase", "model recommendations unlock after tuning and the re-run benchmark")
 		return
 	}
 	ctx := r.Context()
@@ -498,12 +501,13 @@ func (s *Server) handleRecommendations(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 500, "db", err.Error())
 		return
 	}
-	tuned := toMetrics(rs, "tuned")
-	bw := median(tuned, "gpu", "mlx", "mem_bandwidth")
-	tps := median(tuned, "llm", "mlx", "generation_tps")
-	if bw == 0 || tps == 0 {
-		writeErr(w, http.StatusConflict, "no_measurements", "tuned MLX measurements are missing; re-run the benchmark")
-		return
+	var bw, tps float64
+	for _, stage := range []string{"tuned", "baseline"} {
+		ms := toMetrics(rs, stage)
+		if bw, tps = median(ms, "gpu", "mlx", "mem_bandwidth"), median(ms, "llm", "mlx", "generation_tps"); bw > 0 && tps > 0 {
+			break
+		}
+		bw, tps = 0, 0
 	}
 	if err := s.refreshHW(ctx); err != nil {
 		writeErr(w, 500, "detect", err.Error())
@@ -543,9 +547,11 @@ func (s *Server) handleRecommendations(w http.ResponseWriter, r *http.Request) {
 	for _, t := range probe.SupportedModelTypes {
 		in.SupportedModelTypes[t] = true
 	}
-	if in.BenchModelBytes, err = s.engine.RepoBytes(ctx, bench.BenchModelMLX); err != nil {
-		writeErr(w, http.StatusBadGateway, "huggingface", "cannot read benchmark model size: "+err.Error())
-		return
+	if bw > 0 {
+		if in.BenchModelBytes, err = s.engine.RepoBytes(ctx, bench.BenchModelMLX); err != nil {
+			writeErr(w, http.StatusBadGateway, "huggingface", "cannot read benchmark model size: "+err.Error())
+			return
+		}
 	}
 	out, err := s.engine.Recommend(ctx, in)
 	if err != nil {
@@ -560,4 +566,32 @@ func (s *Server) handleRecommendations(w http.ResponseWriter, r *http.Request) {
 type servingBrief struct {
 	State string `json:"state"`
 	Repo  string `json:"repo"`
+}
+
+// previousMeasured returns the pinned headline of the newest earlier run that has measurements.
+func (s *Server) previousMeasured(ctx context.Context, current string) (map[string]report.Headline, int64) {
+	runs, err := s.tn.ListRuns(ctx, 20)
+	if err != nil {
+		return nil, 0
+	}
+	for _, r := range runs {
+		if r.ID == current {
+			continue
+		}
+		rs, err := s.tn.Results(ctx, r.ID)
+		if err != nil {
+			continue
+		}
+		h := map[string]report.Headline{}
+		if m := toMetrics(rs, "baseline"); len(m) > 0 {
+			h["baseline"] = report.HeadlineOf(m)
+		}
+		if m := toMetrics(rs, "tuned"); len(m) > 0 {
+			h["tuned"] = report.HeadlineOf(m)
+		}
+		if len(h) > 0 {
+			return h, r.CreatedAt
+		}
+	}
+	return nil, 0
 }

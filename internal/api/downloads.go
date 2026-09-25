@@ -8,7 +8,6 @@ import (
 	"github.com/tonynv/aituner/internal/download"
 	"github.com/tonynv/aituner/internal/modeldir"
 	"github.com/tonynv/aituner/internal/reco"
-	"github.com/tonynv/aituner/internal/store"
 )
 
 const settingModelsDir = "models_dir"
@@ -167,12 +166,7 @@ func (s *Server) handleStartDownload(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "bad_repo", "invalid repository id")
 		return
 	}
-	run, ok := s.runOr501(w, r)
-	if !ok {
-		return
-	}
-	if run.Phase != store.PhaseTunedDone {
-		writeErr(w, http.StatusConflict, "wrong_phase", "downloads unlock together with the recommendations")
+	if !s.hardwareReady(w) {
 		return
 	}
 	if !s.offered(req.Repo) {
@@ -185,7 +179,7 @@ func (s *Server) handleStartDownload(w http.ResponseWriter, r *http.Request) {
 	}
 	mlx, ready := s.mlxRuntime()
 	if !ready {
-		writeErr(w, http.StatusConflict, "no_runtime", "the MLX runtime is not installed yet; run a benchmark first")
+		writeErr(w, http.StatusConflict, "no_runtime", "the MLX runtime is not installed yet; install it first")
 		return
 	}
 	root, _, err := s.modelsDir(r.Context())
@@ -194,7 +188,7 @@ func (s *Server) handleStartDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.cfg.Log("audit: download requested repo=" + req.Repo + " dest_root=" + root)
-	st, err := s.dl.Start(s.ctx, mlx, req.Repo, root)
+	st, err := s.dl.Enqueue(s.ctx, mlx, req.Repo, root)
 	switch err {
 	case nil:
 		writeJSON(w, http.StatusAccepted, st)

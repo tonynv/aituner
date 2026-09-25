@@ -102,7 +102,8 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 		return nil, err
 	}
 	if s.hw != nil {
-		if err := s.ensureRun(ctx, false); err != nil {
+		// every launch starts a fresh run from detection; earlier runs stay saved for the report and comparisons
+		if err := s.ensureRun(ctx, true); err != nil {
 			return nil, err
 		}
 		s.recoverInterrupted(ctx)

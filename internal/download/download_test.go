@@ -2,9 +2,11 @@ package download
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -232,5 +234,68 @@ func TestLiveCancelAndResume(t *testing.T) {
 	d := waitState(t, m, root, repo, State_Done, 5*time.Minute)
 	if d.BytesDone != d.BytesTotal {
 		t.Fatalf("%+v", d)
+	}
+}
+
+// The queue runs one download at a time, in order, skips a failing start and lets a waiting item be removed.
+func TestQueueOrderFailureAndCancel(t *testing.T) {
+	root := t.TempDir()
+	m := New(hf.New())
+	var mu sync.Mutex
+	var started []string
+	m.start = func(_ context.Context, _ bench.MLX, repo, _ string) (Status, error) {
+		mu.Lock()
+		started = append(started, repo)
+		mu.Unlock()
+		if repo == "org/bad" {
+			return Status{}, errors.New("no such model")
+		}
+		// become active like the real Start; the test ends it via finish
+		r := &run{cancel: func() {}, st: Status{Repo: repo, State: State_Running}}
+		m.mu.Lock()
+		m.active = r
+		m.mu.Unlock()
+		return r.st, nil
+	}
+	ctx := context.Background()
+	for _, repo := range []string{"org/a", "org/bad", "org/c", "org/d"} {
+		st, err := m.Enqueue(ctx, bench.MLX{}, repo, root)
+		if err != nil || st.State != State_Queued {
+			t.Fatalf("%s: %+v %v", repo, st, err)
+		}
+	}
+	if st, _ := m.Enqueue(ctx, bench.MLX{}, "org/c", root); st.Position == 0 {
+		t.Fatal("duplicate must report its existing position")
+	}
+	wait := func(cond func() bool) {
+		t.Helper()
+		for i := 0; i < 200; i++ {
+			if cond() {
+				return
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		t.Fatal("timed out")
+	}
+	wait(func() bool { m.mu.Lock(); defer m.mu.Unlock(); return m.active != nil && m.active.st.Repo == "org/a" })
+	if !m.Cancel("org/d") { // removed while waiting
+		t.Fatal("waiting item not cancellable")
+	}
+	m.mu.Lock()
+	a := m.active
+	m.mu.Unlock()
+	m.finish(a, State_Done, "") // a ends: bad fails and is skipped, c starts
+	wait(func() bool { m.mu.Lock(); defer m.mu.Unlock(); return m.active != nil && m.active.st.Repo == "org/c" })
+	got := map[string]Status{}
+	for _, s := range m.List(root) {
+		got[s.Repo] = s
+	}
+	if got["org/bad"].State != State_Error || got["org/d"].State != State_Cancel || got["org/c"].State != State_Running {
+		t.Fatalf("%+v", got)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if strings.Join(started, ",") != "org/a,org/bad,org/c" {
+		t.Fatalf("order: %v", started)
 	}
 }
