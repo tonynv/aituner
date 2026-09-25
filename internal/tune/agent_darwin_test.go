@@ -14,7 +14,7 @@ import (
 func TestAgentInstallRunsAtLoadAndRemoves(t *testing.T) {
 	ctx := context.Background()
 	a := AgentSpec{Label: "ai.aituner.test." + strings.ReplaceAll(t.Name(), "/", "-"), Dir: t.TempDir(), Env: [][2]string{{"AITUNER_TEST_VAR", "hello"}}}
-	t.Cleanup(func() { _ = a.Remove(ctx); _ = exec.Command("/bin/launchctl", "unsetenv", "AITUNER_TEST_VAR").Run() })
+	t.Cleanup(func() { _ = a.Remove(ctx); _ = guiLaunchctl(ctx, "unsetenv", "AITUNER_TEST_VAR").Run() })
 
 	if a.Installed() {
 		t.Fatal("must start absent")
@@ -29,14 +29,14 @@ func TestAgentInstallRunsAtLoadAndRemoves(t *testing.T) {
 		t.Fatalf("plist must not be group/world writable: %v", fi.Mode())
 	}
 	// Install verifies the variables itself; check independently, then prove a re-run repairs a cleared value.
-	if out, _ := exec.Command("/bin/launchctl", "getenv", "AITUNER_TEST_VAR").Output(); strings.TrimSpace(string(out)) != "hello" {
+	if out, _ := guiLaunchctl(ctx, "getenv", "AITUNER_TEST_VAR").Output(); strings.TrimSpace(string(out)) != "hello" {
 		t.Fatalf("variable not set after Install: %q", out)
 	}
-	_ = exec.Command("/bin/launchctl", "unsetenv", "AITUNER_TEST_VAR").Run()
+	_ = guiLaunchctl(ctx, "unsetenv", "AITUNER_TEST_VAR").Run()
 	if err := a.Install(ctx); err != nil { // idempotent re-install re-applies the variable
 		t.Fatalf("re-install: %v", err)
 	}
-	if out, _ := exec.Command("/bin/launchctl", "getenv", "AITUNER_TEST_VAR").Output(); strings.TrimSpace(string(out)) != "hello" {
+	if out, _ := guiLaunchctl(ctx, "getenv", "AITUNER_TEST_VAR").Output(); strings.TrimSpace(string(out)) != "hello" {
 		t.Fatalf("re-install did not restore the variable: %q", out)
 	}
 	if err := a.Remove(ctx); err != nil {
@@ -57,5 +57,25 @@ func TestAgentScriptIsConstantOnly(t *testing.T) {
 	s := DefaultAgent().script()
 	if s != "/bin/launchctl setenv OLLAMA_FLASH_ATTENTION 1; /bin/launchctl setenv OLLAMA_KV_CACHE_TYPE q8_0" {
 		t.Fatalf("script: %q", s)
+	}
+}
+
+// Environment changes must land in the GUI domain (where Ollama.app reads them) even when the caller runs in another
+// launchd session, such as tmux's Background session. Checked against launchd's own view of the GUI domain.
+func TestGUILaunchctlTargetsTheGUIDomain(t *testing.T) {
+	ctx := context.Background()
+	t.Cleanup(func() { _ = guiLaunchctl(ctx, "unsetenv", "AITUNER_TEST_GUI").Run() })
+	if err := guiLaunchctl(ctx, "setenv", "AITUNER_TEST_GUI", "yes").Run(); err != nil {
+		t.Fatal(err)
+	}
+	out, err := exec.Command("/bin/launchctl", "print", DefaultAgent().domain()).Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(out), "AITUNER_TEST_GUI => yes") {
+		t.Fatal("variable is not in the GUI domain's environment")
+	}
+	if v, _ := guiLaunchctl(ctx, "getenv", "AITUNER_TEST_GUI").Output(); strings.TrimSpace(string(v)) != "yes" {
+		t.Fatalf("getenv read %q", v)
 	}
 }

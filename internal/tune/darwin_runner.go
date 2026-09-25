@@ -40,7 +40,7 @@ func sysctlWiredMB(ctx context.Context) (int64, error) {
 }
 
 func launchctlGet(ctx context.Context, key string) string {
-	out, _ := exec.CommandContext(ctx, "/bin/launchctl", "getenv", key).Output()
+	out, _ := guiLaunchctl(ctx, "getenv", key).Output()
 	return strings.TrimSpace(string(out))
 }
 
@@ -72,7 +72,7 @@ func (r DarwinRunner) Apply(ctx context.Context, c Change) error {
 		return r.agent().Install(ctx)
 	case KeyOllamaEnv:
 		for k, v := range map[string]string{"OLLAMA_FLASH_ATTENTION": "1", "OLLAMA_KV_CACHE_TYPE": "q8_0"} {
-			if err := exec.CommandContext(ctx, "/bin/launchctl", "setenv", k, v).Run(); err != nil {
+			if err := guiLaunchctl(ctx, "setenv", k, v).Run(); err != nil {
 				return fmt.Errorf("launchctl setenv %s: %w", k, err)
 			}
 		}
@@ -104,7 +104,7 @@ func (r DarwinRunner) Revert(ctx context.Context, c Change) error {
 		return r.agent().Remove(ctx)
 	case KeyOllamaEnv:
 		for _, k := range []string{"OLLAMA_FLASH_ATTENTION", "OLLAMA_KV_CACHE_TYPE"} {
-			_ = exec.CommandContext(ctx, "/bin/launchctl", "unsetenv", k).Run()
+			_ = guiLaunchctl(ctx, "unsetenv", k).Run()
 		}
 		return r.restartOllama(ctx)
 	}

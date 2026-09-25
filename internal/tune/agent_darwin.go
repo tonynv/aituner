@@ -107,7 +107,7 @@ func (a AgentSpec) waitEnv(ctx context.Context) error {
 	for {
 		ok := true
 		for _, kv := range a.Env {
-			out, _ := exec.CommandContext(ctx, "/bin/launchctl", "getenv", kv[0]).Output()
+			out, _ := guiLaunchctl(ctx, "getenv", kv[0]).Output()
 			if strings.TrimSpace(string(out)) != kv[1] {
 				ok = false
 			}
