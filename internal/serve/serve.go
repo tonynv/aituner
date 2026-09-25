@@ -98,6 +98,8 @@ type Status struct {
 }
 
 type Manager struct {
+	// LogFile, when set, receives a copy of the server's output (0600, truncated at each start) so a terminal pane can tail it.
+	LogFile string
 	// PIDFile, when set, records the running server so a later launch can stop it if this process was killed hard.
 	PIDFile string
 
@@ -107,6 +109,7 @@ type Manager struct {
 	done chan struct{}
 
 	logMu  sync.Mutex
+	outf   *os.File // guarded by logMu
 	ring   []LogLine
 	seq    int
 	client *http.Client
@@ -131,6 +134,9 @@ func (m *Manager) appendLog(text string) {
 	}
 	m.logMu.Lock()
 	defer m.logMu.Unlock()
+	if m.outf != nil {
+		fmt.Fprintln(m.outf, text)
+	}
 	m.seq++
 	m.ring = append(m.ring, LogLine{Seq: m.seq, Time: time.Now().UnixMilli(), Text: text})
 	if len(m.ring) > ringSize {
@@ -233,6 +239,7 @@ func (m *Manager) Start(parent context.Context, spec Spec) error {
 	m.mu.Unlock()
 
 	m.writePID(cmd.Process.Pid, spec.ModelDir)
+	m.openLogFile()
 	// tie the server's life to ours: when aituner's context ends (quit, SIGTERM) the model server stops with it
 	go func() {
 		select {
@@ -271,6 +278,7 @@ func (m *Manager) Start(parent context.Context, spec Spec) error {
 		}
 		m.mu.Unlock()
 		m.removePID()
+		m.closeLogFile()
 		close(done)
 	}()
 	go m.waitReady(parent, port, done)
@@ -401,4 +409,26 @@ func ReapStale(pidfile string) (reaped bool, err error) {
 	}
 	_ = syscall.Kill(-rec.PID, syscall.SIGKILL)
 	return true, nil
+}
+
+func (m *Manager) openLogFile() {
+	if m.LogFile == "" {
+		return
+	}
+	f, err := os.OpenFile(m.LogFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	if err != nil {
+		return
+	}
+	m.logMu.Lock()
+	m.outf = f
+	m.logMu.Unlock()
+}
+
+func (m *Manager) closeLogFile() {
+	m.logMu.Lock()
+	defer m.logMu.Unlock()
+	if m.outf != nil {
+		m.outf.Close()
+		m.outf = nil
+	}
 }

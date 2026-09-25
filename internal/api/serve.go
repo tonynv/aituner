@@ -48,7 +48,11 @@ func (s *Server) startGateway() error {
 		return fmt.Errorf("the gateway port %d is in use by another program; free it or set AITUNER_GATEWAY_PORT", port)
 	}
 	g := gateway.New(s.gwKey, s.serve.Backend, s.cfg.Log)
-	g.ModelID = s.serve.Status().Repo
+	st := s.serve.Status()
+	g.ModelID = st.Repo
+	if c := s.contextFor(context.Background(), st.ModelDir, st.Spec.KVBits); c != nil && c.Known {
+		g.ContextWindow = c.Tokens
+	}
 	srv := &http.Server{Handler: g.Handler(), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 5 * time.Minute}
 	s.gw, s.gwPort = srv, port
 	go func() {

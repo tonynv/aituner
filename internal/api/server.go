@@ -86,6 +86,7 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 	}
 	s := &Server{cfg: cfg, ctx: ctx, tn: cfg.Store.ForTenant(id), jobs: newJobs(), hosts: map[string]bool{}, allowed: map[string]bool{}, dl: download.New(cfg.HF), serve: serve.New(), launch: map[string]time.Time{}, launchTTL: 15 * time.Minute}
 	s.serve.PIDFile = filepath.Join(cfg.DataDir, "serve.pid")
+	s.serve.LogFile = filepath.Join(cfg.DataDir, "model-server.log")
 	if reaped, _ := serve.ReapStale(s.serve.PIDFile); reaped {
 		cfg.Log("stopped a model server left over from a previous run")
 	}
