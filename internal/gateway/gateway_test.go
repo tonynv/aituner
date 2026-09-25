@@ -89,7 +89,8 @@ func TestToOpenAIMessagesSystemToolsAndToolResults(t *testing.T) {
 
 func TestToOpenAIRejectsBadRequests(t *testing.T) {
 	for name, req := range map[string]string{
-		"not json": `nope`, "no messages": `{"messages":[]}`, "bad role": `{"messages":[{"role":"system","content":"x"}]}`,
+		"not json": `nope`, "no messages": `{"messages":[]}`, "bad role": `{"messages":[{"role":"tool","content":"x"}]}`,
+		"only system": `{"messages":[{"role":"system","content":"x"}]}`,
 		"bad content": `{"messages":[{"role":"user","content":42}]}`, "bad system": `{"system":42,"messages":[{"role":"user","content":"x"}]}`,
 	} {
 		if _, err := ToOpenAI([]byte(req)); err == nil {
@@ -679,6 +680,23 @@ func TestStreamMidMessageFencedToolCallAndLegitimateJSONBlocks(t *testing.T) {
 	for cut := 1; cut < len(full); cut += 7 {
 		if _, tools, _ = streamOf(t, "ok ", full[:cut], full[cut:]); len(tools) != 1 {
 			t.Fatalf("split at %d: %v", cut, tools)
+		}
+	}
+}
+
+// Claude Code 2.1.x sends system-role entries inside "messages" (found by running the real client).
+func TestSystemRoleMessagesAreMergedIntoOneLeadingSystemMessage(t *testing.T) {
+	tr, err := ToOpenAI([]byte(`{"system":"Base rules.","messages":[{"role":"user","content":"hi"},{"role":"system","content":[{"type":"text","text":"Extra reminder."}]},{"role":"assistant","content":"hello"}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := tr.Body["messages"].([]map[string]any)
+	if len(m) != 3 || m[0]["role"] != "system" || m[0]["content"] != "Base rules.\n\nExtra reminder." || m[1]["role"] != "user" || m[2]["role"] != "assistant" {
+		t.Fatalf("%v", m)
+	}
+	for _, x := range m[1:] {
+		if x["role"] == "system" {
+			t.Fatal("a second system message would break most chat templates")
 		}
 	}
 }

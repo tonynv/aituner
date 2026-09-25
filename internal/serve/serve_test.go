@@ -7,8 +7,10 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -204,5 +206,103 @@ func TestLiveServeLifecycle(t *testing.T) {
 	}
 	if _, ok := m.Backend(); ok {
 		t.Fatal("backend reported after stop")
+	}
+}
+
+func fakeServer(t *testing.T, name string) (bin, dir string) {
+	t.Helper()
+	dir = t.TempDir()
+	bin = filepath.Join(dir, name)
+	os.WriteFile(bin, []byte("#!/bin/sh\nexec sleep 300\n"), 0o755)
+	return bin, dir
+}
+
+func alive(pid int) bool { return syscallKill0(pid) == nil }
+
+func TestServerStopsWhenTheParentContextEnds(t *testing.T) {
+	bin, dir := fakeServer(t, "mlx_lm.server")
+	ctx, cancel := context.WithCancel(context.Background())
+	m := New()
+	if err := m.Start(ctx, Spec{Bin: bin, ModelDir: dir}); err != nil {
+		t.Fatal(err)
+	}
+	pid := m.Status().PID
+	if pid == 0 || !alive(pid) {
+		t.Fatal("server should be running")
+	}
+	cancel() // aituner quits or receives SIGTERM
+	for i := 0; i < 80 && alive(pid); i++ {
+		time.Sleep(100 * time.Millisecond)
+	}
+	if alive(pid) {
+		t.Fatalf("model server %d outlived aituner's context: it would keep GPU memory forever", pid)
+	}
+}
+
+func TestPIDFileIsWrittenAndRemoved(t *testing.T) {
+	bin, dir := fakeServer(t, "mlx_lm.server")
+	m := New()
+	m.PIDFile = filepath.Join(t.TempDir(), "serve.pid")
+	if err := m.Start(context.Background(), Spec{Bin: bin, ModelDir: dir}); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(m.PIDFile)
+	if err != nil || !strings.Contains(string(b), dir) {
+		t.Fatalf("pidfile: %s %v", b, err)
+	}
+	if fi, _ := os.Stat(m.PIDFile); fi.Mode().Perm() != 0o600 {
+		t.Fatalf("mode %v", fi.Mode().Perm())
+	}
+	m.Stop()
+	if _, err := os.Stat(m.PIDFile); err == nil {
+		t.Fatal("pidfile must be removed once the server stops")
+	}
+}
+
+// After a hard crash the next launch stops the leftover server, but never a process that merely reuses the pid.
+func TestReapStaleStopsOnlyTheRecordedServer(t *testing.T) {
+	bin, dir := fakeServer(t, "mlx_lm.server")
+	stale := exec.Command(bin, "--model", dir)
+	stale.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	if err := stale.Start(); err != nil {
+		t.Fatal(err)
+	}
+	go stale.Wait()
+	pf := filepath.Join(t.TempDir(), "serve.pid")
+	rec, _ := json.Marshal(pidRecord{PID: stale.Process.Pid, ModelDir: dir})
+	os.WriteFile(pf, rec, 0o600)
+	if reaped, err := ReapStale(pf); err != nil || !reaped {
+		t.Fatalf("reaped=%v err=%v", reaped, err)
+	}
+	for i := 0; i < 30 && alive(stale.Process.Pid); i++ {
+		time.Sleep(100 * time.Millisecond)
+	}
+	if alive(stale.Process.Pid) {
+		t.Fatal("the stale server was not stopped")
+	}
+	if _, err := os.Stat(pf); err == nil {
+		t.Fatal("pidfile must be cleared")
+	}
+
+	// an unrelated process that happens to have the recorded pid must survive
+	other := exec.Command("sleep", "30")
+	if err := other.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer other.Process.Kill()
+	go other.Wait()
+	rec, _ = json.Marshal(pidRecord{PID: other.Process.Pid, ModelDir: dir})
+	os.WriteFile(pf, rec, 0o600)
+	if reaped, _ := ReapStale(pf); reaped || !alive(other.Process.Pid) {
+		t.Fatalf("an unrelated process was killed (reaped=%v)", reaped)
+	}
+	for name, content := range map[string]string{"garbage": "not json", "pid 1": `{"pid":1,"model_dir":"/x"}`, "empty": `{}`} {
+		os.WriteFile(pf, []byte(content), 0o600)
+		if reaped, err := ReapStale(pf); reaped || err != nil {
+			t.Errorf("%s: reaped=%v err=%v", name, reaped, err)
+		}
+	}
+	if reaped, err := ReapStale(filepath.Join(t.TempDir(), "missing")); reaped || err != nil {
+		t.Fatal("a missing pidfile is normal")
 	}
 }

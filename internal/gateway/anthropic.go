@@ -104,10 +104,11 @@ func toOpenAI(raw []byte) (map[string]any, string, bool, map[string]bool, error)
 		return nil, "", false, nil, fmt.Errorf("messages must not be empty")
 	}
 	var msgs []map[string]any
+	var sysParts []string // the system prompt, plus any system-role messages (Claude Code sends some inside messages)
 	if sb, err := blocksOf(req.System); err != nil {
 		return nil, "", false, nil, fmt.Errorf("system: %w", err)
 	} else if t := textOf(sb); t != "" {
-		msgs = append(msgs, map[string]any{"role": "system", "content": t})
+		sysParts = append(sysParts, t)
 	}
 	for i, m := range req.Messages {
 		blocks, err := blocksOf(m.Content)
@@ -115,6 +116,10 @@ func toOpenAI(raw []byte) (map[string]any, string, bool, map[string]bool, error)
 			return nil, "", false, nil, fmt.Errorf("messages[%d]: %w", i, err)
 		}
 		switch m.Role {
+		case "system":
+			if t := textOf(blocks); t != "" {
+				sysParts = append(sysParts, t)
+			}
 		case "user":
 			var tools []map[string]any
 			var parts []string
@@ -161,6 +166,12 @@ func toOpenAI(raw []byte) (map[string]any, string, bool, map[string]bool, error)
 		default:
 			return nil, "", false, nil, fmt.Errorf("messages[%d]: unsupported role %q", i, m.Role)
 		}
+	}
+	if len(msgs) == 0 { // a system prompt alone is not a conversation
+		return nil, "", false, nil, fmt.Errorf("messages must contain at least one user or assistant message")
+	}
+	if len(sysParts) > 0 { // chat templates want exactly one system message, first
+		msgs = append([]map[string]any{{"role": "system", "content": strings.Join(sysParts, "\n\n")}}, msgs...)
 	}
 	out := map[string]any{"messages": msgs, "max_tokens": req.MaxTokens}
 	if req.MaxTokens <= 0 {

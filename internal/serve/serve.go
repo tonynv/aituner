@@ -8,6 +8,7 @@ package serve
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -97,6 +98,9 @@ type Status struct {
 }
 
 type Manager struct {
+	// PIDFile, when set, records the running server so a later launch can stop it if this process was killed hard.
+	PIDFile string
+
 	mu   sync.Mutex
 	st   Status
 	cmd  *exec.Cmd
@@ -228,6 +232,16 @@ func (m *Manager) Start(parent context.Context, spec Spec) error {
 	done := m.done
 	m.mu.Unlock()
 
+	m.writePID(cmd.Process.Pid, spec.ModelDir)
+	// tie the server's life to ours: when aituner's context ends (quit, SIGTERM) the model server stops with it
+	go func() {
+		select {
+		case <-parent.Done():
+			m.Stop()
+		case <-done:
+		}
+	}()
+
 	m.appendLog(fmt.Sprintf("--- starting %s on internal port %d", spec.Repo, port))
 	for _, r := range []io.Reader{stdout, stderr} {
 		go func(r io.Reader) {
@@ -256,6 +270,7 @@ func (m *Manager) Start(parent context.Context, spec Spec) error {
 			}
 		}
 		m.mu.Unlock()
+		m.removePID()
 		close(done)
 	}()
 	go m.waitReady(parent, port, done)
@@ -332,4 +347,58 @@ func (m *Manager) Stop() {
 		_ = syscall.Kill(-pid, syscall.SIGKILL)
 		<-done
 	}
+}
+
+type pidRecord struct {
+	PID      int    `json:"pid"`
+	ModelDir string `json:"model_dir"`
+}
+
+func (m *Manager) writePID(pid int, dir string) {
+	if m.PIDFile == "" {
+		return
+	}
+	b, _ := json.Marshal(pidRecord{PID: pid, ModelDir: dir})
+	_ = os.WriteFile(m.PIDFile, b, 0o600)
+}
+
+func (m *Manager) removePID() {
+	if m.PIDFile != "" {
+		_ = os.Remove(m.PIDFile)
+	}
+}
+
+// ReapStale stops a model server left behind by a previous aituner that was killed before it could stop it (such a server
+// keeps gigabytes of GPU memory). It only acts on the process recorded in the pidfile, and only if that process is still
+// running, is an mlx_lm.server, and was started for the recorded model folder, so a reused pid is never touched.
+func ReapStale(pidfile string) (reaped bool, err error) {
+	b, err := os.ReadFile(pidfile)
+	if err != nil {
+		return false, nil // nothing recorded
+	}
+	defer os.Remove(pidfile)
+	var rec pidRecord
+	if json.Unmarshal(b, &rec) != nil || rec.PID <= 1 || rec.ModelDir == "" {
+		return false, nil
+	}
+	if syscall.Kill(rec.PID, 0) != nil {
+		return false, nil // already gone
+	}
+	out, err := exec.Command("/bin/ps", "-o", "command=", "-p", strconv.Itoa(rec.PID)).Output()
+	if err != nil {
+		return false, nil
+	}
+	cmdline := string(out)
+	if !strings.Contains(cmdline, "mlx_lm.server") || !strings.Contains(cmdline, rec.ModelDir) {
+		return false, nil // the pid now belongs to something else: leave it alone
+	}
+	_ = syscall.Kill(-rec.PID, syscall.SIGTERM)
+	for i := 0; i < 50; i++ {
+		if syscall.Kill(rec.PID, 0) != nil {
+			return true, nil
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	_ = syscall.Kill(-rec.PID, syscall.SIGKILL)
+	return true, nil
 }
