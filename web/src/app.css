@@ -98,9 +98,25 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-sp
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 
 summary { display: flex; align-items: center; min-height: var(--tap); cursor: pointer; }
-@media (pointer: coarse) { .btn.danger { color: var(--bad); border-color: var(--bad); }
-.btn.danger:hover:not(:disabled) { background: color-mix(in srgb, var(--bad) 12%, transparent); }
-.btn.small { min-height: var(--tap); } }
+@media (pointer: coarse) { .btn.small { min-height: var(--tap); } }
+/* phones: 16px body text, and form fields at 16px so iOS Safari does not zoom in when one is focused */
+@media (max-width: 760px) { body { font-size: 16px; } }
+html { -webkit-tap-highlight-color: transparent; }
+.btn:active:not(:disabled) { transform: scale(0.98); opacity: 0.85; }
+/* iOS feel on phones (owner request): large titles, inset grouped cards, dialogs as bottom sheets. Buttons keep the
+   restrained 3px corners; grouped cards use the 10px iOS radius. */
+@media (max-width: 760px) {
+  h2 { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; }
+  .card { border-radius: 10px; }
+  .stack > .row:has(> .btn.primary:only-child) .btn.primary { width: 100%; }
+  dialog[open] { margin: auto 0 0 !important; width: 100% !important; max-width: 100% !important; max-height: 88vh; overflow-y: auto;
+    border-radius: 12px 12px 0 0 !important; border: 0 !important;
+    padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px)) !important; animation: sheet-up 0.28s cubic-bezier(0.2, 0.8, 0.2, 1); }
+  dialog .row.end { flex-direction: column-reverse; align-items: stretch; }
+  dialog .row.end .btn { width: 100%; }
+}
+@keyframes sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@media (max-width: 760px), (pointer: coarse) { input, select, textarea { font-size: 16px !important; } }
 
 /* Wide tables scroll inside their wrapper instead of crushing their columns on a phone. */
 .scroll-x > table { min-width: 560px; }

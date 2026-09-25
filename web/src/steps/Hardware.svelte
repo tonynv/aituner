@@ -133,6 +133,7 @@
 
 <style>
   .hero { display: flex; align-items: center; gap: 20px; }
+  @media (max-width: 760px) { .hero { flex-direction: column; text-align: center; gap: 8px; } .hero :global(img) { width: 132px; height: 132px; } }
   .chip { font-weight: 500; margin: 2px 0; }
   .head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; color: var(--muted); }
   .head h3 { color: var(--text); }

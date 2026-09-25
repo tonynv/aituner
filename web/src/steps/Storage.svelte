@@ -109,7 +109,7 @@
 <style>
   .folder { display: grid; gap: 10px; }
   .between { justify-content: space-between; }
-  .where { align-items: flex-start; flex-wrap: nowrap; min-width: 0; flex: 1; }
+  .where { align-items: flex-start; flex-wrap: nowrap; min-width: 0; flex: 1 1 260px; } /* the buttons wrap below before the text gets squeezed */
   .info { min-width: 0; flex: 1; display: grid; gap: 4px; }
   .path-text { word-break: break-all; }
   .tight { gap: 10px; }

@@ -229,7 +229,12 @@ Colour (owner request, overriding the global "monochrome-forward" default for th
 icon tile (Apple system hues darkened so the white glyph is >= 4.4:1 and the tile >= 3.1:1 against either sidebar), the
 selected row and primary buttons use a blue accent (#0a6cde, white text 4.98:1). All colours are theme tokens. The
 sidebar foot lists tools and services (MLX, model server, gateway, macmon, Ollama): green = active now, grey = installed
-and idle, hollow = not installed, always with the word as well. Originally a five-step stepper; monochrome-forward, near-black dark / true-white light, mono + sans type, thin-line icons,
+and idle, hollow = not installed, always with the word as well.
+Phones (below 760px, owner request "feel like a native iOS app"): no sidebar; a pinned translucent navigation bar whose
+small title fades in once the page's large title scrolls under it, a bottom tab bar (Hardware, Downloads, Setup,
+Monitor, More) clear of the home indicator, a More sheet (Benchmark, Tune, Re-run, Report, Storage, tools and services)
+with inset grouped rows, every dialog as a bottom sheet with full-width actions, 30px large titles, 10px grouped cards
+(buttons keep 3px), 16px text and form fields (no iOS zoom on focus), no tap highlight, pressed-state feedback. Originally a five-step stepper; monochrome-forward, near-black dark / true-white light, mono + sans type, thin-line icons,
 44px+ touch targets, safe-area aware, offline shell via service worker (API calls need the server; UI degrades
 with a clear banner). Diff view for tuning; before/after table with delta and "within noise" marking; recommendation
 cards grouped code / chat / image with fit grade, runtime, size, estimated tok/s, provenance and one-click

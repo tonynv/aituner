@@ -22,7 +22,7 @@
   const sign = (v) => (v > 0 ? '+' : '') + v.toFixed(1) + '%';
 </script>
 
-<aside class="pin" aria-label="Pinned performance stats">
+<aside class="pin" class:empty={!chips.length} aria-label="Pinned performance stats">
   <div class="strip">
     {#if chips.length}
       {#each chips as c (c.key)}
@@ -68,5 +68,6 @@
   .serving { cursor: pointer; color: var(--text); font: inherit; text-align: left; border-color: var(--ok); }
   .serving .u { max-width: 120px; overflow: hidden; text-overflow: ellipsis; display: inline-block; vertical-align: bottom; white-space: nowrap; }
   .empty { font-size: 13px; padding: 6px 0; }
+  @media (max-width: 760px) { .pin.empty { display: none; } }
   @media (max-width: 560px) { .stage { display: none; } .chip { min-width: 78px; padding: 4px 8px; } }
 </style>

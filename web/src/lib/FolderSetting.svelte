@@ -50,7 +50,7 @@
 <style>
   .folder { display: grid; gap: 10px; }
   .between { justify-content: space-between; }
-  .where { align-items: flex-start; flex-wrap: nowrap; min-width: 0; flex: 1; }
+  .where { align-items: flex-start; flex-wrap: nowrap; min-width: 0; flex: 1 1 260px; } /* the buttons wrap below before the text gets squeezed */
   .info { min-width: 0; flex: 1; display: grid; gap: 4px; }
   .path-text { word-break: break-all; }
   .path { width: 100%; min-height: var(--tap); padding: 0 12px; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--bg); color: var(--text); font: 13px var(--font-mono); }

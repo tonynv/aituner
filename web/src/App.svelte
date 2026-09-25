@@ -60,9 +60,34 @@
 
   // a new tab opens at its top, not wherever the previous page was scrolled to
   $effect(() => { app.tab; window.scrollTo({ top: 0 }); });
-  // in the narrow top bar the sections scroll sideways: keep the current one in view
-  $effect(() => { app.tab; requestAnimationFrame(() => document.querySelector('nav .item.current')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })); });
 
+  // phones: bottom tab bar (main path + More); everything else lives in the More sheet
+  let moreSheet;
+  const MORE = [
+    { tab: 'benchmark', tile: 'orange', label: 'Benchmark', icon: 'gauge' },
+    { tab: 'tune', tile: 'purple', label: 'Tune', icon: 'sliders' },
+    { tab: 'rerun', tile: 'teal', label: 'Re-run', icon: 'refresh' },
+    { tab: 'report', tile: 'blue', label: 'Report', icon: 'list' },
+    { tab: 'storage', tile: 'pink', label: 'Storage', icon: 'disk' },
+  ];
+  const TITLES = { hardware: 'Hardware', downloads: 'Downloads', setup: 'Setup', monitor: 'Monitor', benchmark: 'Benchmark', tune: 'Tune', rerun: 'Re-run', report: 'Report', storage: 'Storage' };
+  const inMore = $derived(MORE.some((m) => m.tab === app.tab));
+  function go(tab) { app.tab = tab; moreSheet?.close(); }
+  // iOS large titles: the bar's small title fades in only once the page's own big title has scrolled under the bar
+  let compact = $state(false);
+  $effect(() => {
+    app.tab;
+    let raf = 0;
+    const check = () => {
+      raf = 0;
+      const h = document.querySelector('main h2');
+      compact = !h || h.getBoundingClientRect().bottom < 44 + (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--safe-t')) || 0);
+    };
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(check); };
+    addEventListener('scroll', onScroll, { passive: true });
+    requestAnimationFrame(check);
+    return () => { removeEventListener('scroll', onScroll); cancelAnimationFrame(raf); };
+  });
   const st = $derived(app.state);
   const runReady = $derived(!!app.serve && ((app.serve.models?.length ?? 0) > 0 || app.serve.server?.state !== 'stopped'));
   const serving = $derived(app.serve?.server?.state === 'running');
@@ -92,8 +117,25 @@
   </li>
 {/snippet}
 
-<!-- A native-style layout: a sidebar of sections (System Settings, Finder) beside the content. On narrow screens the
-     sidebar becomes a top bar with the same sections in a scrolling row. -->
+{#snippet serviceList()}
+  <ul class="services" aria-label="Tools and services">
+    {#each app.services as sv (sv.id)}
+      <li title="{sv.name}: {sv.detail}">
+        <span class="dot" class:on={sv.active} class:idle={sv.installed && !sv.active} aria-hidden="true"></span>
+        <span class="sname">{sv.name}</span>
+        <span class="sdetail">{sv.active ? 'active' : sv.installed ? 'idle' : 'off'}</span>
+      </li>
+    {/each}
+  </ul>
+{/snippet}
+
+<!-- Native-style layouts: on a Mac-sized window a sidebar of sections (System Settings, Finder) beside the content; on a
+     phone an iOS layout: a pinned, blurred header with the section title, a bottom tab bar and a More sheet. -->
+<header class="mhead">
+  <span class="mbrand"><Icon name="gauge" size={16} /></span>
+  <span class="mtitle" class:shown={compact}>{TITLES[app.tab] ?? 'aituner'}</span>
+  <button class="mbtn" onclick={toggleTheme} aria-label="Toggle dark and light theme"><Icon name={dark ? 'sun' : 'moon'} size={20} /></button>
+</header>
 <div class="app">
   <aside class="sidebar">
     <div class="brand"><Icon name="gauge" size={18} /><span class="name">aituner</span></div>
@@ -107,17 +149,7 @@
       </nav>
     {/if}
     <div class="foot">
-      {#if app.services.length}
-        <ul class="services" aria-label="Tools and services">
-          {#each app.services as sv (sv.id)}
-            <li title="{sv.name}: {sv.detail}">
-              <span class="dot" class:on={sv.active} class:idle={sv.installed && !sv.active} aria-hidden="true"></span>
-              <span class="sname">{sv.name}</span>
-              <span class="sdetail">{sv.active ? 'active' : sv.installed ? 'idle' : 'off'}</span>
-            </li>
-          {/each}
-        </ul>
-      {/if}
+      {#if app.services.length}{@render serviceList()}{/if}
       {#if machine}<span class="machine">{machine}</span>{/if}
       <div class="tools">
         {#if st?.phase === 'tuned_done'}<button class="btn small" onclick={() => newRunDialog.showModal()}><Icon name="refresh" size={14} /> New run</button>{/if}
@@ -156,6 +188,36 @@
   </div>
 </div>
 
+{#if st && st.supported}
+  <nav class="tabbar" aria-label="Sections">
+    {#each MAIN as s (s.tab)}
+      <button class:current={app.tab === s.tab} onclick={() => go(s.tab)} aria-current={app.tab === s.tab ? 'page' : undefined}>
+        <Icon name={s.icon} size={24} /><span>{s.label}</span>
+      </button>
+    {/each}
+    <button class:current={inMore} onclick={() => { moreSheet.showModal(); moreSheet.focus(); }} aria-haspopup="dialog">
+      <Icon name="grid" size={24} /><span>More</span>
+    </button>
+  </nav>
+{/if}
+
+<dialog class="sheet" bind:this={moreSheet} aria-label="More" tabindex="-1" onclick={(e) => e.target === moreSheet && moreSheet.close()}>
+  <div class="grabber" aria-hidden="true"></div>
+  <ul class="group-list">
+    {#each MORE as m (m.tab)}
+      <li><button class:current={app.tab === m.tab} disabled={locked(m.tab)} onclick={() => go(m.tab)}>
+        <span class="tile" style:background="var(--tile-{m.tile})"><Icon name={m.icon} size={16} /></span>
+        <span class="lbl">{m.label}</span>
+        {#if locked(m.tab)}<Icon name="lock" size={14} />{:else}<span class="chev"><Icon name="chevron" size={16} /></span>{/if}
+      </button></li>
+    {/each}
+  </ul>
+  {#if app.services.length}<p class="sheet-h">Tools and services</p><div class="group-box">{@render serviceList()}</div>{/if}
+  {#if machine}<p class="sheet-foot">{machine}</p>{/if}
+  {#if st?.phase === 'tuned_done'}<button class="btn" onclick={() => { moreSheet.close(); newRunDialog.showModal(); }}><Icon name="refresh" size={16} /> New run</button>{/if}
+  <button class="btn done" onclick={() => moreSheet.close()}>Done</button>
+</dialog>
+
 {#if scanning}<BootScan ondetected={detected} ondone={scanDone} />{/if}
 
 <dialog bind:this={newRunDialog} aria-labelledby="nr-title">
@@ -168,7 +230,9 @@
 </dialog>
 
 <style>
-  .app { display: grid; grid-template-columns: 224px minmax(0, 1fr); min-height: 100vh; }
+  .app { display: grid; grid-template-columns: 224px minmax(0, 1fr); min-height: 100vh;
+    /* the sidebar column's colour and divider run the full page height, however long the content is */
+    background: linear-gradient(to right, var(--surface) 0 223px, var(--border) 223px 224px, var(--bg) 224px); }
   .sidebar { position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; gap: 18px; padding: 16px 10px 12px; background: var(--surface); border-right: 1px solid var(--border); overflow-y: auto; }
   .brand { display: flex; align-items: center; gap: 8px; padding: 0 8px; font-weight: 600; font-size: 15px; }
   nav ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
@@ -206,21 +270,53 @@
   dialog p { margin: 10px 0 20px; }
   .end { justify-content: flex-end; }
   @media (pointer: coarse) { .item { min-height: var(--tap); } }
-  /* narrow: the sidebar becomes a top bar, sections scroll sideways */
+  /* phone header and tab bar exist only below 760px */
+  .mhead, .tabbar { display: none; }
+  .tile { display: inline-flex; }
   @media (max-width: 760px) {
-    .app { display: block; }
-    .sidebar { position: static; height: auto; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 12px var(--gutter); border-right: 0; border-bottom: 1px solid var(--border); }
-    .brand { padding: 0; }
-    nav { order: 3; flex-basis: 100%; display: flex; align-items: center; gap: 6px; overflow-x: auto; scrollbar-width: none; }
-    nav::-webkit-scrollbar { display: none; }
-    nav ul { flex-direction: row; }
-    .item { width: auto; min-height: var(--tap); }
-    .group { margin: 0 2px 0 8px; padding-left: 10px; border-left: 1px solid var(--border-strong); white-space: nowrap; }
-    .opt { display: none; }
-    .foot { margin: 0 0 0 auto; flex-direction: row; align-items: center; padding: 0; }
-    .machine { display: none; }
-    .services { order: 4; flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 6px 14px; padding-top: 8px; }
-    .services li { display: flex; gap: 6px; }
-    .content { padding: 0 var(--gutter) 48px; }
+    .app { display: block; background: var(--bg); }
+    .sidebar { display: none; }
+    .content { padding: 0 var(--gutter) calc(64px + var(--safe-b) + 24px); }
+    main { padding-top: 12px; }
+    .content :global(.pin) { position: static; }
+    /* iOS navigation bar: pinned, translucent, blurring what scrolls under it */
+    .mhead { display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; position: sticky; top: 0; z-index: 30;
+      padding: var(--safe-t) calc(8px + var(--safe-r)) 0 calc(8px + var(--safe-l)); min-height: calc(44px + var(--safe-t));
+      background: color-mix(in srgb, var(--bg) 78%, transparent); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px);
+      border-bottom: 0.5px solid var(--border); }
+    .mbrand { display: inline-flex; justify-content: center; color: var(--muted); }
+    .mtitle { text-align: center; font-weight: 600; font-size: 17px; opacity: 0; transition: opacity 0.2s; }
+    .mtitle.shown { opacity: 1; }
+    .mbtn { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border: 0; background: none; color: var(--accent); cursor: pointer; }
+    /* iOS tab bar: fixed to the bottom, clear of the home indicator */
+    .tabbar { display: grid; grid-template-columns: repeat(5, 1fr); position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+      padding: 4px var(--safe-r) var(--safe-b) var(--safe-l); background: color-mix(in srgb, var(--surface) 82%, transparent);
+      -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px); border-top: 0.5px solid var(--border); }
+    .tabbar button { display: flex; flex-direction: column; align-items: center; gap: 2px; min-height: 49px; padding: 4px 0 2px; border: 0; background: none;
+      color: var(--muted); font-size: 10px; font-weight: 500; cursor: pointer; }
+    .tabbar button.current { color: var(--accent); }
+    .tabbar button:active { opacity: 0.6; }
+    /* More: an iOS sheet with inset grouped rows */
+    .sheet { width: 100%; max-width: 100%; margin: auto 0 0; border: 0; border-radius: 12px 12px 0 0; background: var(--bg);
+      padding: 8px calc(16px + var(--safe-r)) calc(16px + var(--safe-b)) calc(16px + var(--safe-l)); max-height: 88vh; overflow-y: auto; }
+    .sheet[open] { display: flex; flex-direction: column; gap: 12px; animation: sheet-up 0.28s cubic-bezier(0.2, 0.8, 0.2, 1); }
+    .sheet:focus { outline: none; }
+    .grabber { width: 36px; height: 5px; border-radius: 3px; background: var(--border-strong); margin: 0 auto 4px; }
+    .group-list { list-style: none; margin: 0; padding: 0; background: var(--surface); border-radius: 10px; overflow: hidden; }
+    .group-list li + li button { border-top: 0.5px solid var(--border); }
+    .group-list button { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 48px; padding: 0 14px; border: 0; background: none; color: var(--text); font-size: 17px; text-align: left; cursor: pointer; }
+    .group-list button:active:not(:disabled) { background: var(--surface-2); }
+    .group-list button:disabled { color: var(--faint); }
+    .group-list button.current .lbl { font-weight: 600; }
+    .group-list .tile { width: 29px; height: 29px; border-radius: 7px; }
+    .group-list .lbl { flex: 1; }
+    .chev { display: inline-flex; color: var(--faint); transform: rotate(-90deg); }
+    .sheet-h { margin: 8px 16px 0; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.02em; }
+    .group-box { background: var(--surface); border-radius: 10px; padding: 12px 14px; }
+    .group-box .services { border: 0; padding: 0; gap: 10px; font-size: 15px; }
+    .group-box .services li { font-size: 15px; }
+    .sheet-foot { margin: 0 16px; font-size: 13px; color: var(--muted); }
+    .sheet .done { width: 100%; }
   }
+  @keyframes sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
 </style>
