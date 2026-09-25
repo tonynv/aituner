@@ -324,3 +324,18 @@ func TestLogFileIsNeverWrittenThroughAPlantedSymlink(t *testing.T) {
 		t.Fatalf("the model server log was written through a symlink: %q", b)
 	}
 }
+
+func TestPromptCacheArgsAndValidation(t *testing.T) {
+	a := strings.Join(Spec{Bin: "b", ModelDir: "/m", PromptCacheBytes: 3 << 30, PromptCacheSize: 4}.Args(1), " ")
+	if !strings.Contains(a, "--prompt-cache-bytes 3221225472") || !strings.Contains(a, "--prompt-cache-size 4") {
+		t.Fatalf("args: %s", a)
+	}
+	if strings.Contains(strings.Join(Spec{Bin: "b", ModelDir: "/m"}.Args(1), " "), "prompt-cache") {
+		t.Fatal("zero values must leave mlx_lm defaults")
+	}
+	for _, s := range []Spec{{Bin: "b", ModelDir: "/m", PromptCacheBytes: -1}, {Bin: "b", ModelDir: "/m", PromptCacheSize: 5000}} {
+		if err := s.validate(); err == nil {
+			t.Fatalf("accepted %+v", s)
+		}
+	}
+}

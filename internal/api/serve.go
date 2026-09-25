@@ -299,7 +299,8 @@ func (s *Server) handleServeStart(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "not_downloaded", "that model is not downloaded")
 		return
 	}
-	spec := serve.Spec{Bin: filepath.Join(hw.Software.MLX.VenvPath, "bin", "mlx_lm.server"), ModelDir: dir, Repo: req.Repo, MaxTokens: req.MaxTokens, KVBits: req.KVBits}
+	spec := serve.Spec{Bin: filepath.Join(hw.Software.MLX.VenvPath, "bin", "mlx_lm.server"), ModelDir: dir, Repo: req.Repo, MaxTokens: req.MaxTokens, KVBits: req.KVBits,
+		PromptCacheBytes: promptCacheBudget(hw.Memory.TotalBytes), PromptCacheSize: 4}
 	if err := s.startGateway(); err != nil {
 		writeErr(w, http.StatusConflict, "gateway_port", err.Error())
 		return
@@ -330,4 +331,11 @@ func (s *Server) handleServeStop(w http.ResponseWriter, r *http.Request) {
 	s.stopGateway()
 	s.serve.Stop()
 	writeJSON(w, http.StatusOK, s.serve.Status())
+}
+
+// promptCacheBudget bounds the server's reusable-prompt cache. Left alone, mlx_lm keeps up to 10 prompts with no size
+// limit, which grew to 19 GB with Claude Code's large, varying prompts on a 32 GB machine. One eighth of RAM, within 1-6 GiB.
+func promptCacheBudget(total int64) int64 {
+	const gib = int64(1) << 30
+	return min(max(total/8, gib), 6*gib)
 }

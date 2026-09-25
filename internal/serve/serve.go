@@ -48,6 +48,9 @@ type Spec struct {
 	KVBits       int    // quantise the KV cache to this many bits (0 = off; 4 or 8)
 	KVGroupSize  int    // 0 = default (64)
 	QuantKVStart int    // start quantising the KV cache after this many tokens (0 = default)
+	// PromptCacheBytes caps the memory the server may keep for reusable prompt prefixes (0 = mlx_lm's default, which is unbounded by size).
+	PromptCacheBytes int64
+	PromptCacheSize  int // max distinct cached prompts (0 = mlx_lm's default of 10)
 }
 
 func (s Spec) validate() error {
@@ -62,6 +65,10 @@ func (s Spec) validate() error {
 		return fmt.Errorf("%w: KV group size must be 32, 64 or 128", ErrBadSpec)
 	case s.QuantKVStart < 0 || s.QuantKVStart > 1<<20:
 		return fmt.Errorf("%w: quantised-KV start out of range", ErrBadSpec)
+	case s.PromptCacheBytes < 0 || s.PromptCacheBytes > 1<<40:
+		return fmt.Errorf("%w: prompt cache bytes out of range", ErrBadSpec)
+	case s.PromptCacheSize < 0 || s.PromptCacheSize > 1024:
+		return fmt.Errorf("%w: prompt cache size must be between 0 and 1024", ErrBadSpec)
 	}
 	return nil
 }
@@ -71,6 +78,12 @@ func (s Spec) Args(port int) []string {
 	a := []string{"--model", s.ModelDir, "--host", "127.0.0.1", "--port", strconv.Itoa(port)}
 	if s.MaxTokens > 0 {
 		a = append(a, "--max-tokens", strconv.Itoa(s.MaxTokens))
+	}
+	if s.PromptCacheBytes > 0 {
+		a = append(a, "--prompt-cache-bytes", strconv.FormatInt(s.PromptCacheBytes, 10))
+	}
+	if s.PromptCacheSize > 0 {
+		a = append(a, "--prompt-cache-size", strconv.Itoa(s.PromptCacheSize))
 	}
 	if s.KVBits > 0 {
 		a = append(a, "--kv-bits", strconv.Itoa(s.KVBits))
@@ -227,8 +240,16 @@ func (m *Manager) Start(parent context.Context, spec Spec) error {
 	cmd := exec.Command(spec.Bin, spec.Args(port)...)
 	cmd.Env = append(os.Environ(), "PYTHONUNBUFFERED=1", "HF_HUB_OFFLINE=1", "HF_HUB_DISABLE_TELEMETRY=1", "TOKENIZERS_PARALLELISM=false")
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true} // own process group so Stop can take down any children
-	stdout, _ := cmd.StdoutPipe()
-	stderr, _ := cmd.StderrPipe()
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		m.mu.Unlock()
+		return fmt.Errorf("cannot start the model server: %w", err)
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		m.mu.Unlock()
+		return fmt.Errorf("cannot start the model server: %w", err)
+	}
 	if err := cmd.Start(); err != nil {
 		m.mu.Unlock()
 		return fmt.Errorf("cannot start the model server: %w", err)

@@ -408,3 +408,7 @@ Known gaps:
 - Recommendation install commands assume the user runs them from the aituner venv (`~/Library/Application Support/aituner/venv/bin`).
 - Linux: not implemented (`platform` returns `ErrUnsupported`).
 - D1 (SQLite without RLS) still awaits owner sign-off.
+
+### 16.6 Prompt-cache bound (real-run finding)
+
+`mlx_lm.server` keeps up to 10 reusable prompts and, by default, no byte limit. During a real Claude Code run (large, varying ~15K-token prompts) the log showed `Prompt Cache: 9 sequences, 19.28 GB` on a 32 GB machine. aituner now starts the server with `--prompt-cache-size 4` and `--prompt-cache-bytes` = RAM/8 clamped to 1-6 GiB (4 GiB on the reference machine). Verified live: with 7K-token distinct prompts the log shows `1 sequences, 2.17 GB` (older entries evicted). Known limitation: `message_start` carries `input_tokens: 0` because `mlx_lm.server` reports usage only in its final chunk; the final `message_delta` carries the real counts.
