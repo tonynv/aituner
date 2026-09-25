@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -41,19 +42,20 @@ func main() {
 	noTUI := flag.Bool("no-tui", false, "headless: log to stdout instead of the terminal UI")
 	noOpen := flag.Bool("no-open", false, "do not open the browser")
 	showVersion := flag.Bool("version", false, "print version and exit")
+	appMode := flag.Bool("app", false, "run under the macOS app (implies -no-tui -no-open): prints \"link <url>\" on stdout now and for each line read on stdin; exits when stdin closes")
 	flag.Parse()
 	if *showVersion {
 		fmt.Println("aituner", version)
 		return
 	}
 
-	if err := run(*port, *noTUI, *noOpen); err != nil {
+	if err := run(*port, *noTUI || *appMode, *noOpen || *appMode, *appMode); err != nil {
 		fmt.Fprintln(os.Stderr, "aituner:", err)
 		os.Exit(1)
 	}
 }
 
-func run(port int, noTUI, noOpen bool) error {
+func run(port int, noTUI, noOpen, appMode bool) error {
 	plat := platform.Current()
 	dataDir, err := plat.DataDir()
 	if err != nil {
@@ -120,7 +122,10 @@ func run(port int, noTUI, noOpen bool) error {
 		openBrowser(link())
 	}
 
-	if noTUI {
+	if appMode {
+		go serveAppControl(os.Stdin, os.Stdout, link, stop)
+		<-ctx.Done()
+	} else if noTUI {
 		fmt.Printf("aituner running. Open (single-use link): %s\n", link())
 		<-ctx.Done()
 	} else if err := runTUI(ctx, stop, srv, link); err != nil {
@@ -131,6 +136,22 @@ func run(port int, noTUI, noOpen bool) error {
 	shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	return httpSrv.Shutdown(shutdown)
+}
+
+// serveAppControl speaks the macOS app's line protocol: it writes "link <url>" (a fresh single-use launch link) now and
+// again for each line read from in, and stops aituner when in closes, so the server never outlives the app, even one
+// that was force-quit.
+func serveAppControl(in io.Reader, out io.Writer, link func() string, stop context.CancelFunc) {
+	defer stop()
+	if _, err := fmt.Fprintln(out, "link", link()); err != nil {
+		return
+	}
+	sc := bufio.NewScanner(in)
+	for sc.Scan() {
+		if _, err := fmt.Fprintln(out, "link", link()); err != nil {
+			return
+		}
+	}
 }
 
 // openLog opens the private (0600) append-only log. A log over 5 MB is moved aside once at startup so it cannot
