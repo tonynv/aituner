@@ -90,7 +90,7 @@ func (e *env) authed(extra map[string]string) map[string]string {
 
 func TestUnauthenticatedRefused(t *testing.T) {
 	e := newEnv(t)
-	for _, p := range []string{"/api/v1/state", "/api/v1/health", "/api/v1/recommendations", "/api/v1/tune/plan", "/api/v1/events"} {
+	for _, p := range []string{"/api/v1/state", "/api/v1/health", "/api/v1/monitor", "/api/v1/recommendations", "/api/v1/tune/plan", "/api/v1/events"} {
 		if r, _ := e.do(t, "GET", p, "", nil); r.StatusCode != 401 {
 			t.Errorf("%s: %d", p, r.StatusCode)
 		}
@@ -244,6 +244,64 @@ func TestHealthIsLiveAndShared(t *testing.T) {
 	get()
 	if !e.s.healthAt.Equal(at) {
 		t.Fatal("a second request inside healthTTL sampled again")
+	}
+}
+
+func TestMonitorStreamsLiveSamples(t *testing.T) {
+	e := newEnv(t)
+	var m monitorResp
+	var seq int64
+	deadline := time.Now().Add(8 * time.Second)
+	for len(m.Samples) == 0 && time.Now().Before(deadline) {
+		r, b := e.do(t, "GET", "/api/v1/monitor?tools=1", "", e.authed(nil))
+		if r.StatusCode != 200 {
+			t.Fatalf("%d %s", r.StatusCode, b)
+		}
+		m = monitorResp{}
+		if err := json.Unmarshal(b, &m); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	if len(m.Samples) == 0 || m.Source == "" || m.Model.State != serve.StateStopped || len(m.Tools) != 3 {
+		t.Fatalf("%+v", m)
+	}
+	if s := m.Samples[0]; s.GPUPct < 0 || s.RAMTotal <= 0 {
+		t.Fatalf("not a real sample: %+v", s)
+	}
+	seq = m.Samples[len(m.Samples)-1].Seq
+	_, b := e.do(t, "GET", "/api/v1/monitor?since="+strconv.FormatInt(seq, 10), "", e.authed(nil))
+	m = monitorResp{}
+	json.Unmarshal(b, &m)
+	for _, s := range m.Samples {
+		if s.Seq <= seq {
+			t.Fatalf("since=%d returned seq %d", seq, s.Seq)
+		}
+	}
+	if m.Tools != nil {
+		t.Fatal("tools listed without tools=1")
+	}
+	for _, bad := range []string{"-1", "x"} {
+		if r, _ := e.do(t, "GET", "/api/v1/monitor?since="+bad, "", e.authed(nil)); r.StatusCode != 400 {
+			t.Errorf("since=%s: %d", bad, r.StatusCode)
+		}
+	}
+}
+
+func TestMonitorToolRequests(t *testing.T) {
+	e := newEnv(t)
+	for body, want := range map[string]int{
+		`{"id":"gpustat","action":"open"}`:      404,
+		`{"id":"mactop","action":"install"}`:    400, // needs confirmation
+		`{"id":"mactop","action":"uninstall"}`:  400,
+		`{"id":"mactop","action":"open","x":1}`: 400, // unknown fields are refused
+	} {
+		if r, b := e.do(t, "POST", "/api/v1/monitor/tool", body, e.authed(nil)); r.StatusCode != want {
+			t.Errorf("%s: %d %s", body, r.StatusCode, b)
+		}
+	}
+	if r, _ := e.do(t, "POST", "/api/v1/monitor/tool", `{"id":"mactop","action":"open"}`, map[string]string{"Cookie": CookieName + "=" + token}); r.StatusCode != 403 {
+		t.Errorf("no Origin on a mutation: %d", r.StatusCode)
 	}
 }
 

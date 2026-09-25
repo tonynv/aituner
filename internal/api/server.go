@@ -26,6 +26,7 @@ import (
 	"github.com/tonynv/aituner/internal/download"
 	"github.com/tonynv/aituner/internal/gateway"
 	"github.com/tonynv/aituner/internal/hf"
+	"github.com/tonynv/aituner/internal/monitor"
 	"github.com/tonynv/aituner/internal/platform"
 	"github.com/tonynv/aituner/internal/reco"
 	"github.com/tonynv/aituner/internal/serve"
@@ -62,6 +63,7 @@ type Server struct {
 	engine  *reco.Engine
 	dl      *download.Manager
 	serve   *serve.Manager
+	mon     *monitor.Monitor
 	gwKey   string
 	gw      *http.Server // the gateway listener; non-nil while a model is served (guarded by mu)
 	gwPort  int
@@ -95,6 +97,7 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 		cfg.Log = func(string) {}
 	}
 	s := &Server{cfg: cfg, ctx: ctx, tn: cfg.Store.ForTenant(id), jobs: newJobs(), hosts: map[string]bool{}, allowed: map[string]bool{}, dl: download.New(cfg.HF), serve: serve.New(), launch: map[string]time.Time{}, launchTTL: 15 * time.Minute}
+	s.mon = monitor.New(s.ramTotal, func() bool { return s.serve.Status().State != serve.StateStopped })
 	s.serve.PIDFile = filepath.Join(cfg.DataDir, "serve.pid")
 	s.serve.LogFile = filepath.Join(cfg.DataDir, "model-server.log")
 	if reaped, _ := serve.ReapStale(s.serve.PIDFile); reaped {
@@ -253,6 +256,8 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("GET /api/v1/state", s.handleState)
 	api.HandleFunc("GET /api/v1/events", s.handleEvents)
 	api.HandleFunc("GET /api/v1/health", s.handleHealth)
+	api.HandleFunc("GET /api/v1/monitor", s.handleMonitor)
+	api.HandleFunc("POST /api/v1/monitor/tool", s.handleMonitorTool)
 	api.HandleFunc("POST /api/v1/detect", s.handleDetect)
 	api.HandleFunc("POST /api/v1/runs", s.handleNewRun)
 	api.HandleFunc("POST /api/v1/benchmark", s.handleBenchmark)
