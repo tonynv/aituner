@@ -32,7 +32,8 @@ func (s *Server) stageMetas(ctx context.Context, runID string) map[string]report
 }
 
 // budgetGB is the GPU-usable memory as of the last benchmark of this run (Metal's recommended working set,
-// or an explicit wired limit if larger). 0 when no benchmark has run yet.
+// or an explicit wired limit if larger). Without a benchmark in this run (every launch starts a new one) it asks
+// Metal directly, once per process.
 func (s *Server) budgetGB(ctx context.Context, runID string, hw *platform.Hardware) float64 {
 	var best int64
 	for _, stage := range []string{"tuned", "baseline"} {
@@ -43,6 +44,9 @@ func (s *Server) budgetGB(ctx context.Context, runID string, hw *platform.Hardwa
 				break
 			}
 		}
+	}
+	if best == 0 {
+		best = s.liveProbeBytes(ctx)
 	}
 	if hw != nil {
 		if w := hw.Memory.WiredLimitMB << 20; w > best {
@@ -243,4 +247,28 @@ func (s *Server) handleCompare(w http.ResponseWriter, r *http.Request) {
 		rows[i].Label = bench.LabelFor(rows[i].Suite, rows[i].Engine, rows[i].Metric)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"a": a.ID, "b": b.ID, "a_stage": sa, "b_stage": sb, "rows": rows})
+}
+
+// liveProbeBytes is Metal's recommended working set from the MLX runtime, probed once and remembered. Without it
+// the model's usable context is unknown and the launcher would tell Claude Code "0 tokens". A failed probe is
+// not retried for 30 seconds.
+func (s *Server) liveProbeBytes(ctx context.Context) int64 {
+	s.probeMu.Lock()
+	defer s.probeMu.Unlock()
+	if s.probedB > 0 {
+		return s.probedB
+	}
+	m, ready := s.mlxRuntime()
+	if !ready || time.Since(s.probeFail) < 30*time.Second {
+		return 0
+	}
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	p, err := m.Probe(ctx)
+	if err != nil || p.MaxRecommendedWorkingSetB <= 0 {
+		s.probeFail = time.Now()
+		return 0
+	}
+	s.probedB = p.MaxRecommendedWorkingSetB
+	return s.probedB
 }

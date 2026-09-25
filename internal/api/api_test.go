@@ -693,3 +693,17 @@ func TestPinnedStatsFallBackToPreviousRun(t *testing.T) {
 		t.Fatalf("own measurements must win: %+v from=%d", st.Headline, st.HeadlineFrom)
 	}
 }
+
+// A fresh run has no benchmark, but the model's usable context (what the Claude launcher reports) still needs the
+// GPU budget: it must come from Metal directly rather than being 0.
+func TestBudgetWithoutBenchmarkComesFromMetal(t *testing.T) {
+	e := newEnv(t)
+	hw := e.s.hardware()
+	if !hw.Software.MLX.Ready {
+		t.Skip("no MLX runtime on this machine")
+	}
+	run, _ := e.s.tn.LatestRun(context.Background())
+	if b := e.s.budgetGB(context.Background(), run.ID, hw); b < 1 {
+		t.Fatalf("budget %v GB with no benchmark", b)
+	}
+}

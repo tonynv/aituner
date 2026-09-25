@@ -73,6 +73,10 @@ type Server struct {
 	hw          *platform.Hardware
 	unsupported string
 	hosts       map[string]bool
+
+	probeMu   sync.Mutex // guards the one-off Metal probe used when no benchmark has recorded the GPU budget
+	probedB   int64
+	probeFail time.Time
 }
 
 func New(ctx context.Context, cfg Config) (*Server, error) {
