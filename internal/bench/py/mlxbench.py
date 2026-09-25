@@ -202,6 +202,70 @@ def sweep(args):
         emit(event="result", suite="llm", engine="mlx", metric=f"decode_{depth}_tps", unit="tok/s", trials=vals, model=args.model, prompt_tokens=depth)
 
 
+def _code_tokens(tok, need):
+    """Real source code as token ids (a coding workload), not random tokens: random tokens route MoE experts unrealistically."""
+    import os
+    import mlx_lm
+
+    root = os.path.dirname(mlx_lm.__file__)
+    text = []
+    for dirpath, _, files in sorted(os.walk(root)):
+        for f in sorted(files):
+            if f.endswith(".py"):
+                with open(os.path.join(dirpath, f), encoding="utf-8", errors="ignore") as fh:
+                    text.append(fh.read())
+        if sum(len(t) for t in text) > need * 6:
+            break
+    ids = tok.encode("\n".join(text))
+    while len(ids) < need:
+        ids = ids + ids
+    return ids
+
+
+def modelbench(args):
+    """One model, real code prompts: prefill and decode speed at several context lengths, with and without a quantised KV
+    cache, plus load time and peak memory. Each (length, kv) cell is one run that yields both speeds: prefill_tps is the
+    prompt phase, decode_tps is generation after that much context."""
+    import mlx.core as mx
+    from mlx_lm import load, stream_generate
+
+    t0 = time.time()
+    model, tok = load(args.model, tokenizer_config={"trust_remote_code": False})
+    load_s = time.time() - t0
+    tok._eos_token_ids = {}
+    ids = _code_tokens(tok, max(args.lengths) + 8192)
+    emit(event="loaded", load_s=load_s)
+
+    def run(n, kv_bits, salt, gen):
+        off = (salt * 1013) % 4096  # different text each trial: nothing is reused
+        prompt = ids[off:off + n]
+        kw = {}
+        if kv_bits:
+            kw.update(kv_bits=kv_bits, kv_group_size=64, quantized_kv_start=0)
+        if hasattr(mx, "reset_peak_memory"):
+            mx.reset_peak_memory()
+        last = None
+        for last in stream_generate(model, tok, prompt, max_tokens=gen, prefill_step_size=args.prefill_step_size, **kw):
+            pass
+        return last
+
+    run(min(args.lengths), 0, 99, 8)  # warmup: kernels compiled, weights paged in
+    for kv_bits in args.kv_bits:
+        for n in args.lengths:
+            if kv_bits and n < 4096:
+                continue  # the quantised cache only matters once the context is long
+            trials = args.trials if n <= 4096 else 1  # long prompts are slow and stable
+            log(f"{n} tokens of context, {'fp16' if not kv_bits else str(kv_bits) + '-bit'} KV cache")
+            pp, tg, peak = [], [], 0.0
+            for t in range(trials):
+                r = run(n, kv_bits, t, args.gen_tokens)
+                pp.append(r.prompt_tps)
+                tg.append(r.generation_tps)
+                peak = max(peak, r.peak_memory)
+            emit(event="result", suite="modelbench", model=args.model, kv_bits=kv_bits, prompt_tokens=n,
+                 prefill_tps=pp, decode_tps=tg, peak_gb=peak)
+
+
 def main():
     p = argparse.ArgumentParser()
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -229,6 +293,14 @@ def main():
     w.add_argument("--gen-tokens", type=int, default=128)
     w.add_argument("--prefill-step-size", type=int, default=2048)
     w.set_defaults(fn=sweep)
+    mb = sub.add_parser("modelbench")
+    mb.add_argument("--model", required=True)
+    mb.add_argument("--lengths", type=int, nargs="+", default=[1024, 4096, 16384])
+    mb.add_argument("--kv-bits", type=int, nargs="+", default=[0, 8])
+    mb.add_argument("--trials", type=int, default=2)
+    mb.add_argument("--gen-tokens", type=int, default=64)
+    mb.add_argument("--prefill-step-size", type=int, default=2048)
+    mb.set_defaults(fn=modelbench)
     m = sub.add_parser("llm")
     m.add_argument("--model", required=True)
     m.add_argument("--prompt-tokens", type=int, default=512)

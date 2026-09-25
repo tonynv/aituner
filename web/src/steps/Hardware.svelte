@@ -5,6 +5,8 @@
   import { api } from '../lib/api.js';
 
   let { hw, plan, phase, detecting = false } = $props();
+  let modelsDir = $state('');
+  $effect(() => { api.settings().then((s) => (modelsDir = s.models_dir)).catch(() => {}); });
   let dialog;
   let err = $state('');
 
@@ -63,7 +65,7 @@
       <div class="head"><Icon name="disk" /><h3>Storage</h3></div>
       <dl class="kv">
         <dt>Free</dt><dd>{fmtBytes(hw.storage.free_bytes)} of {fmtBytes(hw.storage.total_bytes)}</dd>
-        <dt>Models go to</dt><dd class="faint mono">~/.cache/huggingface</dd>
+        <dt>Models go to</dt><dd class="faint mono">{modelsDir || 'not set'}</dd>
       </dl>
     </section>
 

@@ -300,7 +300,7 @@ func (s *Server) handleServeStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	spec := serve.Spec{Bin: filepath.Join(hw.Software.MLX.VenvPath, "bin", "mlx_lm.server"), ModelDir: dir, Repo: req.Repo, MaxTokens: req.MaxTokens, KVBits: req.KVBits,
-		PromptCacheBytes: promptCacheBudget(hw.Memory.TotalBytes), PromptCacheSize: 4}
+		PromptCacheBytes: promptCacheBudget(hw.Memory.TotalBytes), PromptCacheSize: 16}
 	if err := s.startGateway(); err != nil {
 		writeErr(w, http.StatusConflict, "gateway_port", err.Error())
 		return

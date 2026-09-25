@@ -28,8 +28,14 @@
 
 <div class="dl">
   {#if done}
-    <div class="row"><span class="badge ok"><Icon name="check" size={12} /> downloaded</span><span class="faint mono path">{status.dest}</span></div>
-    {#if status.run}<Copyable text={status.run} label="Copy command for the downloaded model" />{/if}
+    <div class="row"><span class="badge ok"><Icon name="check" size={12} /> downloaded</span></div>
+    <div class="faint mono path" title={status.dest}>{status.dest}</div>
+    {#if status.run}
+      <details class="cmd-more">
+        <summary><Icon name="terminal" size={14} /> Command to chat with it</summary>
+        <Copyable text={status.run} label="Copy command for the downloaded model" />
+      </details>
+    {/if}
   {:else if running}
     <Progress value={frac} label="Download progress" />
     <div class="row between">
@@ -58,4 +64,6 @@
   .small { font-size: 13px; }
   .bad { color: var(--bad); margin: 0; }
   .path { word-break: break-all; font-size: 12px; }
+  .cmd-more summary { min-height: 36px; font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  @media (pointer: coarse) { .cmd-more summary { min-height: var(--tap); } }
 </style>

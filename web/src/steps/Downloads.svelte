@@ -4,6 +4,7 @@
   import ModelEntry from '../lib/ModelEntry.svelte';
   import RuntimeCard from '../lib/RuntimeCard.svelte';
   import DownloadQueue from '../lib/DownloadQueue.svelte';
+  import ModelSpeed from '../lib/ModelSpeed.svelte';
   import { app } from '../lib/app.svelte.js';
   import { api } from '../lib/api.js';
   import { fmtBytes } from '../lib/format.js';
@@ -113,6 +114,8 @@
   </div>
 
   <DownloadQueue items={dl} onchange={refreshDownloads} />
+
+  {#if mlxReady}<ModelSpeed {st} />{/if}
 
   <div class="card cta">
     <div>

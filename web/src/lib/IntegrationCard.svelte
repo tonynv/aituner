@@ -54,7 +54,7 @@
       <button class="btn" onclick={remove} disabled={busy || jobRunning}><Icon name="trash" size={16} /> Remove</button>
     {/if}
   </div>
-  {#if disabledReason && !st.configured}<p class="faint small">{disabledReason}</p>{/if}
+  {#if disabledReason}<p class="faint small">{disabledReason}</p>{/if}
   {#if note}<p class="ok small mono">{note}</p>{/if}
   {#if err}<p class="bad small" role="alert"><Icon name="alert" size={14} /> {err}</p>{/if}
   {#if p.caveat && !st.configured}<p class="caveat small"><Icon name="alert" size={14} /> {p.caveat}</p>{/if}

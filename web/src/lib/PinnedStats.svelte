@@ -15,7 +15,8 @@
   const head = $derived(st.headline?.tuned ?? st.headline?.baseline ?? null);
   const stage = $derived(st.headline_from ? 'last measured run' : st.headline?.tuned ? 'after tuning' : st.headline?.baseline ? 'baseline' : '');
   const rows = $derived(Object.fromEntries((st.headline_from ? [] : st.compare ?? []).map((r) => [r.key, r])));
-  const chips = $derived(CHIPS.filter((c) => head && head[c.key] > 0).map((c) => ({ ...c, value: head[c.key], cmp: rows[c.metric] })));
+  const hasOllama = $derived(!!st.hardware?.software?.ollama?.installed);
+  const chips = $derived(CHIPS.filter((c) => head && head[c.key] > 0 && (hasOllama || c.key !== 'ollama_generation_tps')).map((c) => ({ ...c, value: head[c.key], cmp: rows[c.metric] })));
   const pw = $derived(st.hardware?.power);
   const health = $derived(!pw ? '' : pw.source === 'battery' ? 'Battery' : pw.thermal_note?.includes('No thermal') ? 'AC, cool' : pw.source === 'ac' ? 'AC' : '');
   const sign = (v) => (v > 0 ? '+' : '') + v.toFixed(1) + '%';

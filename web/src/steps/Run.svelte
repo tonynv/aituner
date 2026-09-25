@@ -32,11 +32,19 @@
   const chosen = $derived(models.find((m) => m.repo === repo));
   const head = $derived(st.headline?.tuned ?? st.headline?.baseline);
 
-  // rough time to first token for a Claude Code turn (about 15,000 prompt tokens), scaled from the measured 3B prefill
-  const claudeTurnSeconds = $derived.by(() => {
-    if (!head?.mlx_prompt_tps || !chosen?.size_gb) return 0;
-    return 15000 / (head.mlx_prompt_tps * (1.82 / chosen.size_gb));
+  // Wait before the first word of a cold Claude Code request: ~1.8K tokens through aituner-claude (lean), ~27.7K unmodified.
+  // Uses the measured prefill speed of this model when the model benchmark has run; otherwise scales the 3B benchmark model.
+  const LEAN = 1800, FULL = 27700;
+  let bench = $state(null);
+  $effect(() => { api.modelBench().then((r) => (bench = r.items.find((i) => i.repo === repo)?.result ?? null)).catch(() => {}); });
+  const turn = $derived.by(() => {
+    const at = (n) => bench?.runs?.find((c) => c.kv_bits === 0 && c.prompt_tokens === n)?.prefill_tps;
+    if (at(1024) && at(16384)) return { lean: LEAN / at(1024), full: FULL / at(16384), measured: true };
+    if (!head?.mlx_prompt_tps || !chosen?.size_gb) return null;
+    const tps = head.mlx_prompt_tps * (1.82 / chosen.size_gb);
+    return { lean: LEAN / tps, full: FULL / tps, measured: false };
   });
+  const fmtSecs = (v) => (v < 10 ? `${v.toFixed(1)} s` : v < 120 ? `${Math.round(v)} s` : `${(v / 60).toFixed(1)} min`);
 
   async function load() {
     try {
@@ -108,8 +116,8 @@
           </select>
         </label>
       </div>
-      {#if claudeTurnSeconds > 0}
-        <p class="faint small">A large agent prompt (about 15,000 tokens, like Claude Code sends every turn) takes roughly <strong>{Math.round(claudeTurnSeconds)} s</strong> to process on this model (rough estimate from your measured prefill speed; repeated prompts are cached).</p>
+      {#if turn}
+        <p class="faint small">First reply of a Claude Code session takes about <strong>{fmtSecs(turn.lean)}</strong> through <span class="mono">aituner-claude</span> (a lean 1.8K-token request), or <strong>{fmtSecs(turn.full)}</strong> for an unmodified Claude Code setup (27.7K tokens). {turn.measured ? 'Measured on this model.' : 'Estimated from the benchmark model; run the model benchmark on the Downloads page for exact figures.'} Repeat turns reuse the cached prompt.</p>
       {/if}
       <div class="row">
         {#if !live}

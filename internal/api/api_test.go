@@ -707,3 +707,15 @@ func TestBudgetWithoutBenchmarkComesFromMetal(t *testing.T) {
 		t.Fatalf("budget %v GB with no benchmark", b)
 	}
 }
+
+func TestModelBenchNeedsRuntimeAndListsDownloads(t *testing.T) {
+	e := newEnv(t)
+	r, b := e.do(t, "POST", "/api/v1/modelbench", `{}`, e.authed(nil))
+	if r.StatusCode != 409 || !strings.Contains(string(b), "no_runtime") {
+		t.Fatalf("start: %d %s", r.StatusCode, b)
+	}
+	l := e.json(t, "GET", "/api/v1/modelbench", "", 200)
+	if items, ok := l["items"].([]any); !ok || len(items) != 0 {
+		t.Fatalf("list: %v", l)
+	}
+}

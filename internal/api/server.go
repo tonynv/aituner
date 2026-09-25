@@ -255,6 +255,8 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("POST /api/v1/connect/setup", s.handleConnectSetup)
 	api.HandleFunc("POST /api/v1/connect/remove", s.handleConnectRemove)
 	api.HandleFunc("POST /api/v1/connect/launch", s.handleConnectLaunch)
+	api.HandleFunc("GET /api/v1/modelbench", s.handleModelBenchList)
+	api.HandleFunc("POST /api/v1/modelbench", s.handleModelBenchStart)
 	api.HandleFunc("GET /api/v1/settings", s.handleGetSettings)
 	api.HandleFunc("PUT /api/v1/settings", s.handlePutSettings)
 	api.HandleFunc("GET /api/v1/downloads", s.handleListDownloads)
