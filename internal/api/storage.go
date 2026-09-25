@@ -14,11 +14,16 @@ import (
 	"github.com/tonynv/aituner/internal/report"
 )
 
-// Storage: every place aituner keeps data on disk, in one view. Folders the user can move (models, reports) follow the
+// Storage: every place aituner keeps data on disk, in one view. Folders the user can move (models, reports, knowledge
+// base) follow the
 // same policy (modeldir.Resolve: inside the home folder or on an external drive, no hidden or ~/Library paths). The
 // app data folder (database, logs) is fixed by the platform.
 
-const settingReportsDir = "reports_dir"
+// movable folders besides models (which keeps its own setting and endpoint): setting key and default under $HOME
+var folderKinds = map[string]struct{ setting, home string }{
+	"reports":   {"reports_dir", "Reports"},
+	"knowledge": {"knowledge_dir", "KnowledgeBase"},
+}
 
 type folderInfo struct {
 	Dir       string        `json:"dir"`
@@ -29,30 +34,25 @@ type folderInfo struct {
 }
 
 type storageResp struct {
-	Models  folderInfo `json:"models"`
-	Reports folderInfo `json:"reports"`
-	Data    struct {
+	Models    folderInfo `json:"models"`
+	Reports   folderInfo `json:"reports"`
+	Knowledge folderInfo `json:"knowledge"`
+	Data      struct {
 		Dir      string `json:"dir"`
 		DBBytes  int64  `json:"db_bytes"`
 		LogBytes int64  `json:"log_bytes"`
 	} `json:"data"`
 }
 
-func defaultReportsDir() (string, error) {
+// folderDir returns a movable folder (reports, knowledge): the saved setting, or ~/<default>. Nothing is created here.
+func (s *Server) folderDir(ctx context.Context, kind string) (folderInfo, error) {
+	k := folderKinds[kind]
 	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(home, "Documents", "aituner", "reports"), nil
-}
-
-// reportsDir returns the validated reports folder: the saved setting, or ~/Documents/aituner/reports.
-func (s *Server) reportsDir(ctx context.Context) (folderInfo, error) {
-	def, err := defaultReportsDir()
 	if err != nil {
 		return folderInfo{}, err
 	}
-	saved, err := s.tn.GetSetting(ctx, settingReportsDir)
+	def := filepath.Join(home, k.home)
+	saved, err := s.tn.GetSetting(ctx, k.setting)
 	if err != nil {
 		return folderInfo{}, err
 	}
@@ -80,7 +80,8 @@ func (s *Server) storage(ctx context.Context) storageResp {
 	var resp storageResp
 	ms := s.settings(ctx)
 	resp.Models = folderInfo{Dir: ms.ModelsDir, Default: ms.DefaultDir, IsDefault: ms.IsDefault, Info: ms.Info, Problem: ms.Problem}
-	resp.Reports, _ = s.reportsDir(ctx)
+	resp.Reports, _ = s.folderDir(ctx, "reports")
+	resp.Knowledge, _ = s.folderDir(ctx, "knowledge")
 	resp.Data.Dir = s.cfg.DataDir
 	for _, f := range []string{"aituner.db", "aituner.db-wal", "aituner.db-shm"} {
 		resp.Data.DBBytes += fileSize(filepath.Join(s.cfg.DataDir, f))
@@ -99,8 +100,15 @@ type putFolderReq struct {
 	Dir string `json:"dir"`
 }
 
-// handlePutReportsDir validates, creates and proves the folder writable, then saves it; empty resets to the default.
-func (s *Server) handlePutReportsDir(w http.ResponseWriter, r *http.Request) {
+// handlePutFolder (PUT /api/v1/storage/{kind}) validates, creates and proves the folder writable, then saves it;
+// empty resets to the default (which is created later, when Bootstrap or a save needs it).
+func (s *Server) handlePutFolder(w http.ResponseWriter, r *http.Request) {
+	kind := r.PathValue("kind")
+	k, ok := folderKinds[kind]
+	if !ok {
+		writeErr(w, http.StatusNotFound, "unknown_folder", "folder must be reports or knowledge")
+		return
+	}
 	var req putFolderReq
 	if !decode(w, r, &req) {
 		return
@@ -117,8 +125,8 @@ func (s *Server) handlePutReportsDir(w http.ResponseWriter, r *http.Request) {
 		}
 		value = p
 	}
-	s.cfg.Log("audit: reports folder set")
-	if err := s.tn.SetSetting(r.Context(), settingReportsDir, value); err != nil {
+	s.cfg.Log("audit: " + kind + " folder set")
+	if err := s.tn.SetSetting(r.Context(), k.setting, value); err != nil {
 		writeErr(w, 500, "db", err.Error())
 		return
 	}
@@ -155,7 +163,7 @@ func (s *Server) handleSaveReport(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusConflict, "no_results", "this run has no benchmark results")
 		return
 	}
-	dir, err := s.reportsDir(r.Context())
+	dir, err := s.folderDir(r.Context(), "reports")
 	if err == nil {
 		err = modeldir.Ensure(dir.Dir)
 	}
@@ -188,7 +196,7 @@ func (s *Server) handleSaveReport(w http.ResponseWriter, r *http.Request) {
 }
 
 type revealReq struct {
-	Which string `json:"which"` // models | reports | data
+	Which string `json:"which"` // models | reports | knowledge | data
 }
 
 // handleReveal shows one of aituner's own folders in Finder. The path comes from settings, never from the request.
@@ -198,13 +206,13 @@ func (s *Server) handleReveal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	st := s.storage(r.Context())
-	dir := map[string]string{"models": st.Models.Dir, "reports": st.Reports.Dir, "data": st.Data.Dir}[req.Which]
+	dir := map[string]string{"models": st.Models.Dir, "reports": st.Reports.Dir, "knowledge": st.Knowledge.Dir, "data": st.Data.Dir}[req.Which]
 	if dir == "" {
-		writeErr(w, http.StatusBadRequest, "bad_folder", "which must be models, reports or data")
+		writeErr(w, http.StatusBadRequest, "bad_folder", "which must be models, reports, knowledge or data")
 		return
 	}
-	if err := modeldir.Ensure(dir); err != nil && req.Which != "data" {
-		writeErr(w, http.StatusBadRequest, "bad_folder", err.Error())
+	if _, err := os.Stat(dir); err != nil {
+		writeErr(w, http.StatusConflict, "missing_folder", "this folder does not exist yet: Bootstrap in Setup creates it, after you confirm")
 		return
 	}
 	if err := s.cfg.Open(dir); err != nil {

@@ -425,8 +425,21 @@ func TestStorageFoldersSaveAndReveal(t *testing.T) {
 	e.s.cfg.Open = func(p string) error { opened = append(opened, p); return nil }
 	st := e.json(t, "GET", "/api/v1/storage", "", 200)
 	rep := st["reports"].(map[string]any)
-	if rep["is_default"] != true || !strings.HasSuffix(rep["dir"].(string), filepath.Join("Documents", "aituner", "reports")) || st["data"].(map[string]any)["dir"] == "" {
+	kb := st["knowledge"].(map[string]any)
+	if rep["is_default"] != true || filepath.Base(rep["dir"].(string)) != "Reports" || filepath.Base(kb["dir"].(string)) != "KnowledgeBase" || st["data"].(map[string]any)["dir"] == "" {
 		t.Fatalf("%v", st)
+	}
+	if rep["info"].(map[string]any)["exists"] != false {
+		t.Fatal("looking at Storage must not create folders")
+	}
+	if r, _ := e.do(t, "POST", "/api/v1/storage/reveal", `{"which":"knowledge"}`, e.authed(nil)); r.StatusCode != 409 {
+		t.Fatalf("revealed a folder that does not exist: %d", r.StatusCode)
+	}
+	if r, _ := e.do(t, "PUT", "/api/v1/storage/secrets", `{"dir":"~/x"}`, e.authed(nil)); r.StatusCode != 404 {
+		t.Fatalf("unknown folder kind: %d", r.StatusCode)
+	}
+	if kd := e.json(t, "PUT", "/api/v1/storage/knowledge", `{"dir":"~/KB-x"}`, 200)["knowledge"].(map[string]any); filepath.Base(kd["dir"].(string)) != "KB-x" || kd["info"].(map[string]any)["exists"] != true {
+		t.Fatalf("knowledge folder: %v", kd)
 	}
 	home, _ := os.UserHomeDir()
 	for _, bad := range []string{"/etc", "~/Library/x", "~/.hidden", "relative/path"} {
@@ -487,11 +500,17 @@ func TestServicesAndBootstrapPlan(t *testing.T) {
 	if ids["model"]["active"] != false || ids["gateway"]["active"] != false {
 		t.Fatalf("nothing is served in a test: %v", sv)
 	}
-	// the temp data dir has no MLX environment: bootstrap offers to install it
+	// a fresh home has none of the folders and the temp data dir has no MLX: bootstrap lists the folders it will
+	// create (by path, for the user to confirm) and offers to install MLX
 	plan := e.json(t, "GET", "/api/v1/bootstrap", "", 200)
 	steps := plan["steps"].([]any)
-	if len(steps) != 2 || steps[0].(map[string]any)["id"] != "mlx" || steps[0].(map[string]any)["action"] != "install" {
+	if len(steps) != 3 || steps[0].(map[string]any)["id"] != "folders" || steps[1].(map[string]any)["id"] != "mlx" || steps[1].(map[string]any)["action"] != "install" {
 		t.Fatalf("%v", plan)
+	}
+	for _, name := range []string{"Models", "Reports", "KnowledgeBase"} {
+		if !strings.Contains(steps[0].(map[string]any)["detail"].(string), name) {
+			t.Fatalf("folders step must name %s: %v", name, steps[0])
+		}
 	}
 	if r, _ := e.do(t, "POST", "/api/v1/bootstrap", `{}`, e.authed(nil)); r.StatusCode != 400 {
 		t.Fatalf("bootstrap without confirmation: %d", r.StatusCode)

@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/tonynv/aituner/internal/bench"
 	"github.com/tonynv/aituner/internal/connect"
+	"github.com/tonynv/aituner/internal/modeldir"
 	"github.com/tonynv/aituner/internal/monitor"
 	"github.com/tonynv/aituner/internal/serve"
 )
@@ -91,6 +93,9 @@ func (s *Server) bootstrapPlan(ctx context.Context) ([]bootstrapStep, string) {
 		return nil, s.unsupportedMsg()
 	}
 	steps := []bootstrapStep{}
+	if missing := s.missingFolders(ctx); len(missing) > 0 {
+		steps = append(steps, bootstrapStep{ID: "folders", Name: "Folders", Action: "create", Detail: strings.Join(missing, ", ")})
+	}
 	mlx := bootstrapStep{ID: "mlx", Name: "MLX and mlx-lm", Action: "install",
 		Detail: "a private Python environment in aituner's app data, then pip install -U mlx mlx-lm"}
 	if hw.Software.MLX.Ready {
@@ -117,6 +122,18 @@ func (s *Server) bootstrapPlan(ctx context.Context) ([]bootstrapStep, string) {
 		steps = append(steps, st)
 	}
 	return steps, ""
+}
+
+// missingFolders lists the configured models, reports and knowledge base folders that do not exist yet.
+func (s *Server) missingFolders(ctx context.Context) []string {
+	st := s.storage(ctx)
+	var out []string
+	for _, f := range []folderInfo{st.Models, st.Reports, st.Knowledge} {
+		if f.Dir != "" && f.Problem == "" && !f.Info.Exists {
+			out = append(out, f.Dir)
+		}
+	}
+	return out
 }
 
 func (s *Server) handleBootstrapPlan(w http.ResponseWriter, r *http.Request) {
@@ -161,6 +178,13 @@ func (s *Server) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 				say("  already installed")
 			case st.Action == "unavailable":
 				emit(bench.Event{Level: "warn", Message: "  skipped: " + st.Detail})
+			case st.ID == "folders":
+				for _, d := range s.missingFolders(ctx) {
+					if err := modeldir.Ensure(d); err != nil {
+						return fmt.Errorf("create %s: %w", d, err)
+					}
+					say("  created " + d)
+				}
 			case st.ID == "mlx":
 				if _, err := bench.EnsureRuntime(ctx, emit, s.cfg.DataDir, py, ver); err != nil {
 					return fmt.Errorf("MLX: %w", err)
