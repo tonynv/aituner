@@ -1,11 +1,12 @@
 import { api } from './api.js';
 
 // Polls /api/v1/monitor once a second, appending only new samples. Polling is what keeps the server sampling, so it
-// stops as soon as nothing on screen needs it.
+// stops as soon as nothing on screen needs it, and pauses while the page is hidden (a closed or minimised window).
 export function liveMonitor({ keep = 300, tools = false } = {}) {
   const live = $state({ samples: [], source: '', model: null, tools: [], error: '' });
   let seq = 0, timer, stopped = false, withTools = tools;
   async function tick() {
+    if (document.hidden) { timer = setTimeout(tick, 1000); return; }
     try {
       const r = await api.monitor(seq, withTools);
       withTools = false;

@@ -68,7 +68,6 @@
 </div>
 
 <style>
-  :global(body) { background: transparent; }
   .panel { display: flex; flex-direction: column; gap: 14px; padding: 14px 16px 16px; width: 100%; }
   .model { display: flex; gap: 10px; align-items: center; }
   .who { display: flex; flex-direction: column; min-width: 0; }
