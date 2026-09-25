@@ -719,3 +719,25 @@ func TestModelBenchNeedsRuntimeAndListsDownloads(t *testing.T) {
 		t.Fatalf("list: %v", l)
 	}
 }
+
+// Restarting aituner must not pile up empty runs: an untouched run is reused, a used one is not.
+func TestLaunchReusesAnUntouchedRun(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	r1, _ := e.s.tn.LatestRun(ctx)
+	for i := 0; i < 3; i++ {
+		if err := e.s.ensureLaunchRun(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if r, _ := e.s.tn.LatestRun(ctx); r.ID != r1.ID {
+		t.Fatal("an untouched run was not reused")
+	}
+	seed(t, e, r1.ID, "baseline", 100)
+	if err := e.s.ensureLaunchRun(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if r, _ := e.s.tn.LatestRun(ctx); r.ID == r1.ID {
+		t.Fatal("a measured run must be followed by a fresh one")
+	}
+}

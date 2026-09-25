@@ -106,8 +106,9 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 		return nil, err
 	}
 	if s.hw != nil {
-		// every launch starts a fresh run from detection; earlier runs stay saved for the report and comparisons
-		if err := s.ensureRun(ctx, true); err != nil {
+		// every launch starts from detection with a fresh run; earlier runs stay saved for the report and comparisons.
+		// A run that was never used (restarts, crashes) is reused rather than piling up empty runs.
+		if err := s.ensureLaunchRun(ctx); err != nil {
 			return nil, err
 		}
 		s.recoverInterrupted(ctx)
@@ -210,6 +211,19 @@ func (s *Server) hardware() *platform.Hardware {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.hw
+}
+
+// ensureLaunchRun starts the run for this launch: a new one, unless the latest run for this machine is still untouched.
+func (s *Server) ensureLaunchRun(ctx context.Context) error {
+	if r, err := s.tn.LatestRun(ctx); err == nil && r.Phase == store.PhaseDetected && r.Note == "" {
+		snap, _ := json.Marshal(s.hardware())
+		if m, err := s.tn.UpsertMachine(ctx, fingerprint(s.hardware()), snap); err == nil && r.MachineID == m.ID {
+			if rs, err := s.tn.Results(ctx, r.ID); err == nil && len(rs) == 0 {
+				return nil
+			}
+		}
+	}
+	return s.ensureRun(ctx, true)
 }
 
 // ensureRun keeps a run for the detected machine; force starts a fresh one.

@@ -570,7 +570,7 @@ type servingBrief struct {
 
 // previousMeasured returns the pinned headline of the newest earlier run that has measurements.
 func (s *Server) previousMeasured(ctx context.Context, current string) (map[string]report.Headline, int64) {
-	runs, err := s.tn.ListRuns(ctx, 20)
+	runs, err := s.tn.ListRuns(ctx, 500)
 	if err != nil {
 		return nil, 0
 	}

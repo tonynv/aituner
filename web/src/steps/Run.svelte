@@ -43,6 +43,15 @@
   const suggested = $derived(recommendedRepo(benchAll));
   let touched = false; // the user picked a model themselves: stop choosing for them
   $effect(() => { if (!touched && suggested && !live && models.some((m) => m.repo === suggested)) repo = suggested; });
+  const turn = $derived.by(() => {
+    const at = (n) => bench?.runs?.find((c) => c.kv_bits === 0 && c.prompt_tokens === n)?.prefill_tps;
+    if (at(1024) && at(16384)) return { lean: LEAN / at(1024), full: FULL / at(16384), measured: true };
+    if (!head?.mlx_prompt_tps || !chosen?.size_gb) return null;
+    const tps = head.mlx_prompt_tps * (1.82 / chosen.size_gb);
+    return { lean: LEAN / tps, full: FULL / tps, measured: false };
+  });
+  const fmtSecs = (v) => (v < 10 ? `${v.toFixed(1)} s` : v < 120 ? `${Math.round(v)} s` : `${(v / 60).toFixed(1)} min`);
+
   async function load() {
     try {
       sv = await api.serve();
@@ -96,7 +105,7 @@
     </div>
 
     {#if !models.length}
-      <p class="muted">No model is downloaded yet. Download one in the <strong>Models</strong> step, then it appears here.</p>
+      <p class="muted">No model is downloaded yet. Download one in the <strong>Downloads</strong> step, then it appears here.</p>
     {:else}
       <div class="fields">
         <label>Model
