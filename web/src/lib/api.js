@@ -46,6 +46,12 @@ export const api = {
   cancelDownload: (repo) => req('POST', '/api/v1/downloads/cancel', { repo }),
   monitor: (since, tools) => req('GET', `/api/v1/monitor?since=${since}${tools ? '&tools=1' : ''}`),
   monitorTool: (id, action) => req('POST', '/api/v1/monitor/tool', { id, action, confirm: action === 'install' }),
+  storage: () => req('GET', '/api/v1/storage'),
+  setReportsDir: (dir) => req('PUT', '/api/v1/storage/reports', { dir }),
+  reveal: (which) => req('POST', '/api/v1/storage/reveal', { which }),
+  saveReport: (run) => req('POST', '/api/v1/report/save', { run }),
+  resetPreview: () => req('GET', '/api/v1/reset'),
+  reset: (models, reports) => req('POST', '/api/v1/reset', { models, reports, confirm: true }),
   recommendations: (unrestricted) => req('GET', `/api/v1/recommendations?unrestricted=${unrestricted ? 1 : 0}`),
 };
 

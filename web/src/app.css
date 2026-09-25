@@ -66,6 +66,8 @@ button { font: inherit; color: inherit; }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .btn.primary { background: var(--btn-bg); color: var(--btn-fg); border-color: var(--btn-bg); }
 .btn.primary:hover:not(:disabled) { background: var(--btn-hover); }
+.btn.danger { color: var(--bad); border-color: var(--bad); }
+.btn.danger:hover:not(:disabled) { background: color-mix(in srgb, var(--bad) 12%, transparent); }
 .btn.small { min-height: 36px; padding: 0 12px; font-size: 13px; }
 .card { border: 1px solid var(--border); background: var(--surface); border-radius: var(--radius); padding: 16px; }
 .muted { color: var(--muted); }
@@ -90,7 +92,9 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-sp
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 
 summary { display: flex; align-items: center; min-height: var(--tap); cursor: pointer; }
-@media (pointer: coarse) { .btn.small { min-height: var(--tap); } }
+@media (pointer: coarse) { .btn.danger { color: var(--bad); border-color: var(--bad); }
+.btn.danger:hover:not(:disabled) { background: color-mix(in srgb, var(--bad) 12%, transparent); }
+.btn.small { min-height: var(--tap); } }
 
 /* Wide tables scroll inside their wrapper instead of crushing their columns on a phone. */
 .scroll-x > table { min-width: 560px; }

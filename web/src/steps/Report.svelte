@@ -44,6 +44,11 @@
     return med ? ((t[t.length - 1] - t[0]) / 2 / med) * 100 : 0;
   }
   const isSeries = (m) => m.metric === 'sustained_matmul_fp16';
+  let saved = $state('');
+  async function saveToFolder() {
+    err = ''; saved = '';
+    try { const r = await api.saveReport(runId); saved = `Saved ${r.files.length} files to ${r.dir}`; } catch (e) { err = e.message; }
+  }
   async function doCompare() {
     if (!cmpWith || !runId) { cmp = null; return; }
     try { cmp = await api.compare(cmpWith, runId); } catch (e) { err = e.message; }
@@ -58,6 +63,7 @@
     </div>
     {#if rep}
       <div class="row">
+        <button class="btn small" onclick={saveToFolder}><Icon name="folder" size={14} /> Save to folder</button>
         <a class="btn small" href={reportUrl(runId, 'md')} download><Icon name="download" size={14} /> Markdown</a>
         <a class="btn small" href={reportUrl(runId, 'csv')} download><Icon name="download" size={14} /> CSV</a>
         <a class="btn small" href={reportUrl(runId, 'json')} download><Icon name="download" size={14} /> JSON</a>
@@ -73,6 +79,7 @@
 
   {#if loading}<p class="muted">Building report</p>{/if}
   {#if err}<p class="bad" role="alert"><Icon name="alert" size={16} /> {err}</p>{/if}
+  {#if saved}<p class="muted" role="status"><Icon name="check" size={16} /> {saved}</p>{/if}
   {#if empty}
     <div class="card stack">
       <h3>No benchmark results yet</h3>

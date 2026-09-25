@@ -14,7 +14,7 @@ export const app = $state({
 
 // Main path: hardware -> downloads -> setup -> monitor. Benchmark, tune and re-run are an optional performance track that
 // follows the server's phase; a tab unlocks once the run has reached it.
-export const TABS = ['hardware', 'downloads', 'setup', 'monitor', 'benchmark', 'tune', 'rerun', 'report'];
+export const TABS = ['hardware', 'downloads', 'setup', 'monitor', 'storage', 'benchmark', 'tune', 'rerun', 'report'];
 export const PERF_TABS = ['benchmark', 'tune', 'rerun'];
 const PHASE_TAB = { detected: 'hardware', baseline_running: 'benchmark', baseline_done: 'tune', tune_reviewed: 'rerun', tuned_running: 'rerun', tuned_done: 'rerun' };
 export const phaseTab = () => (app.state && PHASE_TAB[app.state.phase]) || 'hardware';

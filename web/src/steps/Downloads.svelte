@@ -20,10 +20,6 @@
   let dl = $state({});
   let anyActive = $state(false);
   let settings = $state(null);
-  let editing = $state(false);
-  let draft = $state('');
-  let folderErr = $state('');
-  let saving = $state(false);
 
   const CATS = [
     { key: 'code', title: 'Coding', icon: 'code' },
@@ -66,11 +62,6 @@
     return () => { stop = true; clearTimeout(t); };
   });
 
-  function edit() { draft = settings?.models_dir ?? ''; folderErr = ''; editing = true; }
-  async function saveFolder(value) {
-    saving = true; folderErr = '';
-    try { settings = await api.setModelsDir(value); editing = false; await refreshDownloads(); } catch (e) { folderErr = e.message; } finally { saving = false; }
-  }
 
   const gradeClass = (g) => (g === 'S' || g === 'A' ? 'ok' : g === 'B' || g === 'C' ? '' : 'warn');
   const bitsLabel = (b) => (b ? `${b}-bit` : 'quant unknown');
@@ -131,34 +122,8 @@
   {/if}
 
   {#if settings}
-    <section class="card folder" aria-label="Download folder">
-      <div class="row between">
-        <div class="row where">
-          <Icon name="folder" />
-          <div class="path-info">
-            <div class="muted small">Downloads are saved to</div>
-            {#if editing}
-              <input class="path" bind:value={draft} spellcheck="false" autocomplete="off" aria-label="Models folder path" onkeydown={(e) => e.key === 'Enter' && saveFolder(draft)} />
-            {:else}
-              <div class="mono path-text">{settings.models_dir || 'not set'}</div>
-              {#if settings.info?.path}<div class="faint small">{fmtBytes(settings.info.free_bytes)} free on this volume{settings.is_default ? ', default folder' : ''}</div>{/if}
-            {/if}
-          </div>
-        </div>
-        <div class="row">
-          {#if editing}
-            <button class="btn small primary" onclick={() => saveFolder(draft)} disabled={saving}>Save</button>
-            <button class="btn small" onclick={() => saveFolder('')} disabled={saving}>Use default</button>
-            <button class="btn small" onclick={() => (editing = false)} disabled={saving}>Cancel</button>
-          {:else}
-            <button class="btn small" onclick={edit} disabled={anyActive}>Change folder</button>
-          {/if}
-        </div>
-      </div>
-      {#if settings.problem}<p class="bad small" role="alert">{settings.problem}</p>{/if}
-      {#if folderErr}<p class="bad small" role="alert">{folderErr}</p>{/if}
-      {#if editing}<p class="faint small">A folder inside your home directory or on an external drive (/Volumes). It is created if it does not exist.</p>{/if}
-    </section>
+    <p class="faint small saving"><Icon name="folder" size={14} /> Saving to <span class="mono">{settings.models_dir}</span>{#if settings.info?.path} · {fmtBytes(settings.info.free_bytes)} free{/if} <button class="link" onclick={() => (app.tab = 'storage')}>Change in Storage</button></p>
+    {#if settings.problem}<p class="bad small" role="alert">{settings.problem}</p>{/if}
   {/if}
 
   {#if loading}<p class="muted">Asking canirun.ai and Hugging Face</p>{/if}
@@ -219,11 +184,8 @@
   .toggle { display: flex; align-items: center; gap: 10px; min-height: var(--tap); cursor: pointer; }
   .toggle input { width: 20px; height: 20px; accent-color: var(--text); }
   .cta { display: flex; justify-content: space-between; gap: 16px; align-items: center; flex-wrap: wrap; }
-  .folder { display: grid; gap: 10px; }
-  .where { align-items: flex-start; flex-wrap: nowrap; min-width: 0; flex: 1; }
-  .path-info { min-width: 0; flex: 1; }
-  .path-text { word-break: break-all; }
-  .path { width: 100%; min-height: var(--tap); padding: 0 12px; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--bg); color: var(--text); font: 13px var(--font-mono); }
+  .saving { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 0; }
+  .link { background: none; border: 0; padding: 0 2px; color: var(--text); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; font: inherit; min-height: 24px; }
   .small { font-size: 13px; }
   .bad { color: var(--bad); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 0; }
   .warn { color: var(--warn); display: flex; gap: 8px; align-items: center; }

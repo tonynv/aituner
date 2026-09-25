@@ -9,6 +9,7 @@
   import Report from './steps/Report.svelte';
   import Run from './steps/Run.svelte';
   import Monitor from './steps/Monitor.svelte';
+  import Storage from './steps/Storage.svelte';
   import PinnedStats from './lib/PinnedStats.svelte';
   import BootScan from './lib/BootScan.svelte';
   import { app, start, phaseTab, perfUnlocked, PERF_TABS, act } from './lib/app.svelte.js';
@@ -100,6 +101,8 @@
         <ul>{#each MAIN as s (s.tab)}{@render navItem(s)}{/each}</ul>
         <p class="group">Performance<span class="opt">optional</span></p>
         <ul>{#each PERF as s (s.tab)}{@render navItem(s)}{/each}</ul>
+        <p class="group">Settings</p>
+        <ul>{@render navItem({ tab: 'storage', label: 'Storage', icon: 'disk' })}</ul>
       </nav>
     {/if}
     <div class="foot">
@@ -126,6 +129,7 @@
       <main>
         {#if app.tab === 'setup'}<Run {st} />
         {:else if app.tab === 'monitor'}<Monitor />
+        {:else if app.tab === 'storage'}<Storage />
         {:else if app.tab === 'report'}<Report />
         {:else if app.tab === 'downloads'}<Downloads {st} onnext={() => (app.tab = 'setup')} />
         {:else if app.tab === 'benchmark'}<Benchmark {st} />
