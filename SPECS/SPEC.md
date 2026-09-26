@@ -264,7 +264,7 @@ are reported honestly in `TASKS.md`.
 - D1 (above): SQLite + app-level tenant scoping instead of true RLS.
 - Bubble Tea TUI wraps a web UI (standards say Go binaries are TUIs; product requires a browser UI) — both are provided.
 - Licence for the repo (none chosen yet).
-- D2: Developer ID signing + notarization of aituner.app (needs an Apple Developer account) so it opens on other Macs.
+- D2: resolved: the owner has a Developer ID; releases are signed and notarized in CI (16.12).
 
 4. **Persist Ollama env (opt-in, user-level, no admin)** — per-user LaunchAgent `ai.aituner.ollama-env`, built with `plutil`
    argv (no shell), lint-checked, `launchctl bootstrap gui/<uid>`, then **`kickstart -k`** and verified by reading the
@@ -494,9 +494,9 @@ Findings along the way: `--tools` does not add tools back under `--bare`; the su
   directories for anything it starts.
 - Icon: `macos/make_icon.swift` renders `web/public/icon.svg` into the standard 824/1024 rounded square for every iconset
   size; `iconutil` builds the `.icns`.
-- **Signing:** ad hoc with the hardened runtime. It runs on the Mac that built it (not quarantined). On another Mac,
-  Gatekeeper rejects it (`spctl` says so) until it is signed with a Developer ID and notarized, which needs an Apple
-  Developer account (open decision D2).
+- **Signing:** local builds are ad hoc with the hardened runtime (they run on the Mac that built them). Releases are
+  signed with the owner's Developer ID (selected by team ID, so no certificate name is stored in the repo), notarized
+  with `notarytool` (App Store Connect API key) and stapled; see 16.12.
 
 ### 16.11 Live monitor (owner request: "nvtop/gpustat-like stats; the screen I land on once a model runs")
 
@@ -514,3 +514,21 @@ Findings along the way: `--tools` does not add tools back under `--bare`; the su
 - UI: **Monitor** tab (model card, meters, 5-minute charts for GPU %, GPU/CPU watts on one axis, memory, then the terminal
   monitors). Starting a model from Setup switches to Monitor once it is serving. Polling pauses while the page is hidden.
 - Not yet measured: live tokens per second of real requests (the gateway does not record throughput yet).
+
+### 16.12 Distribution (owner request: release asset, Homebrew-style install, documentation site)
+
+- **Release workflow** (`.github/workflows/release.yml`, runner `macos-26` = Apple Silicon per actions/runner-images):
+  on a `vX.Y.Z` tag it runs vet and the Go and web tests, imports the Developer ID certificate into a temporary keychain,
+  runs `build_app.sh` with signing and notarization, checks `spctl` and the stapled ticket, publishes a GitHub release
+  (`aituner-X.Y.Z.zip`, `.dmg`, `SHA256SUMS`, notes from the annotated tag) and updates the Homebrew cask. A manual run is
+  a dry run (artifacts on the run, nothing published). Every Action is pinned to the commit of its latest release.
+- **Secrets** (from `secret_mgr`, set with `gh secret set`): `DEVELOPER_ID_P12_BASE64`, `DEVELOPER_ID_P12_PASSWORD`,
+  `NOTARY_KEY_P8_BASE64`, `NOTARY_KEY_ID`, `NOTARY_ISSUER_ID`, `HOMEBREW_TAP_TOKEN` (fine-grained, contents:write on
+  tonynv/homebrew-tap). The team ID is public (it is in every signature) and lives in the workflow.
+- **Homebrew:** `brew install --cask tonynv/tap/aituner` (owner's choice over a curl script). The cask (tonynv/homebrew-tap)
+  requires arm64 and macOS 14, quits the app before uninstalling, and its `zap` removes only what aituner creates (app
+  data, WebKit storage, preferences, launchers, `~/.config/aituner`, its launchd jobs), never models, reports or the
+  knowledge base.
+- **Docs site:** `docs/` (static HTML/CSS with the app's tokens, dark/light, responsive), deployed to
+  https://tonynv.github.io/aituner/ by `.github/workflows/pages.yml` when a release is published, so the page always
+  describes a real signed release.

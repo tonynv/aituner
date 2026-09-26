@@ -33,7 +33,7 @@ Legend: [x] done, [~] partial, [ ] not done. Build order: DataStore -> API -> UI
 - D1: SQLite has no RLS (app-level tenant scoping + isolation test). Accept, or switch to local PostgreSQL?
 - Approve the macOS admin dialog once to exercise the wired-limit apply (the only path not run end to end)
 - Cut v0.1.0 (annotated tag, no attribution) and merge build/v0.1 into main when satisfied
-- D2: Developer ID signing + notarization of aituner.app so it opens on other Macs (needs an Apple Developer account)
+- Provide the release secrets (Developer ID .p12 + password, App Store Connect API key .p8 + key ID + issuer ID, tap token) via secret_mgr
 
 ## P12 Flow: detect -> downloads (queue) -> setup
 - [x] Fresh run + detection on every launch; home page is Hardware
@@ -67,21 +67,24 @@ Legend: [x] done, [~] partial, [ ] not done. Build order: DataStore -> API -> UI
 - [x] Navigation: native-style sidebar (owner choice over a segmented control), button-like rows, top bar on phones
 - [ ] Gateway throughput (tokens/s of real requests) on the Monitor
 
-## Known failing
-- `internal/tune` TestAgentInstallRunsAtLoadAndRemoves fails on this machine with and without the P14/P15 changes
-  ("the agent ran but the variables are not set"): the LaunchAgent env persistence check, not yet investigated
+## Fixed during the test pass (2026-09-25)
+- launchctl env commands now target the GUI domain (asuser): Ollama settings did not apply or verify when aituner ran in tmux/SSH
+- Listing skipped symlinked model folders; storage, clear-data and phone layout defects found by QA and screenshots
 
 ## Queue (owner requests, 2026-09-25), in build order
 - [x] Start-up scan (live detection probes, sensors, profile)
 - [x] Report defaults to the newest measured run; clear models and reports (API)
-- [~] Storage tab: models folder (moved from Downloads), reports folder + save, app data, clear data
-- [ ] Bootstrap button in Setup: installs MLX and supported tools in the terminal-style view
-- [ ] Sidebar status: MLX and tools installed; active services green, idle grey
-- [ ] More colour, the macOS way (tinted section icons, system-blue accent), AA contrast in both themes
+- [x] Storage tab: models, reports (~/Reports), knowledge base (~/KnowledgeBase), app data, clear data
+- [x] Bootstrap button in Setup: creates folders, installs MLX and macmon, in the terminal view (verified end to end on a fresh sandbox)
+- [x] Sidebar status: MLX and tools installed; active services green, idle grey
+- [x] More colour, the macOS way (tinted section icons, system-blue accent), AA contrast in both themes
+- [x] Machine picture from macOS's own device icons (CoreTypes), generic fallback
+- [x] Official icons for the editor integrations (installed apps; Neovim/Vim/tmux logos with licences)
+- [x] Phones feel like iOS (nav bar, tab bar, More sheet, bottom-sheet dialogs)
+- [x] Distribution: release workflow (sign, notarize, publish), Homebrew tap, docs site on Pages
 - [ ] Redesign Downloads (explain the speed table, including the Claude Code turn columns)
-- [ ] Machine picture from macOS's own device icons (CoreTypes), generic server fallback
-- [ ] Official icons for the editor integrations
-- [ ] Knowledge base and Skills folders (join the Storage tab)
+- [ ] Skills folder (with the Skills feature)
+- [ ] Cut v0.1.0 after the release gates
 
 ## Requested next (owner, 2026-09-25), not started
 - Chat with the running model from the Monitor screen (Claude-web-like)

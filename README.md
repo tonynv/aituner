@@ -27,17 +27,25 @@ are pinned across the top of every view (from the last measured run until this l
 binary say so plainly instead of pretending. See [`SPECS/SPEC.md`](SPECS/SPEC.md) for the design, measured results and
 known gaps, and [`TASKS.md`](TASKS.md) for progress.
 
-## Install the Mac app
+## Install
 
 ```sh
-./build_app.sh             # builds dist/aituner.app and dist/aituner.dmg
-./build_app.sh --install   # ... and copies it into /Applications
+brew install --cask tonynv/tap/aituner
 ```
 
-Open `dist/aituner.dmg` and drag **aituner** onto **Applications**, then keep it in the Dock (right-click its Dock icon,
-Options, Keep in Dock). The app shows the UI in its own window and puts a gauge icon in the menu bar: click it for the live
-model and GPU utilisation. Closing the window keeps aituner (and a running model) going in the menu bar; **Quit** stops it.
-The build is signed for this Mac only (ad hoc); see SPEC §16.10.
+Or download `aituner-<version>.dmg` from the [latest release](https://github.com/tonynv/aituner/releases/latest). Releases are
+built by GitHub Actions, signed with a Developer ID and notarized by Apple. Documentation: https://tonynv.github.io/aituner/
+
+To build the app yourself:
+
+```sh
+./build_app.sh             # dist/aituner.app, aituner-<version>.dmg and .zip, SHA256SUMS (ad hoc signed: this Mac only)
+./build_app.sh --install   # ... and copy it into /Applications
+```
+
+Keep it in the Dock (right-click its Dock icon, Options, Keep in Dock). The app shows the UI in its own window and puts a
+gauge icon in the menu bar: click it for the live model and GPU. Closing the window keeps aituner (and a running model)
+going in the menu bar; **Quit** stops it.
 
 ## Run it from a terminal
 
