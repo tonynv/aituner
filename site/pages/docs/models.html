@@ -1,0 +1,27 @@
+<!-- {
+  "title": "Choosing local AI models for your Mac",
+  "nav": "Models",
+  "order": 3,
+  "description": "How aituner ranks MLX models for Apple Silicon, sizes them against your GPU memory budget and context, downloads them safely and measures their real speed."
+} -->
+<h1>Models</h1>
+<p class="lede">aituner only offers models that will actually load and run well on your Mac, and shows why.</p>
+<div class="window"><div class="bar"><i></i><i></i><i></i></div><img src="/assets/screens/models.png" width="1440" height="900" loading="lazy" alt="The model catalog in aituner"></div>
+
+<h2 id="ranking">Where the list comes from</h2>
+<p>aituner asks <a href="https://www.canirun.ai">canirun.ai</a> which models suit your hardware, then finds each model's Apple Silicon (MLX) build on Hugging Face and checks that the installed mlx-lm supports its architecture. Community "unrestricted" variants are included and can be hidden.</p>
+
+<h2 id="fit">Will it fit?</h2>
+<p>The memory bar under each model shows how your GPU memory budget is used once it loads: the weights, the runtime, and the room left for the KV cache, which sets how much context the model can hold. The budget is what macOS lets the GPU use, measured on your Mac rather than assumed.</p>
+
+<h2 id="download">Downloading</h2>
+<p>Add a model to the queue and it downloads in the background, one at a time, in order. aituner fetches only weights, config and tokenizer files (safetensors, never code or pickles), verifies each file, and can resume an interrupted download. Models go to your models folder, <code>~/Models</code> by default; a network share works too.</p>
+
+<h2 id="speed">How fast is it here?</h2>
+<p>In <strong>Downloads, On this Mac</strong>, press <strong>Measure speeds</strong> to benchmark your downloaded models with real source code as the prompt. Each model shows three numbers:</p>
+<ul>
+  <li><strong>Reads</strong>: tokens per second while taking in your prompt.</li>
+  <li><strong>Writes</strong>: tokens per second while answering.</li>
+  <li><strong>First reply</strong>: the wait before the first word of a Claude Code request through aituner's lean launcher.</li>
+</ul>
+<p>The recommended model is the largest one that still writes at an interactive speed: bigger models write better code.</p>

@@ -1,0 +1,44 @@
+<!-- {
+  "title": "Download aituner for Mac",
+  "description": "Download aituner for Apple Silicon Macs: install with Homebrew or the signed, notarized disk image. Requires macOS 14 or later on an M1 or newer Mac."
+} -->
+<section class="hero hero-tight">
+  <div class="wrap">
+    <img class="icon" src="/assets/icon.svg" alt="The aituner app icon" width="104" height="104">
+    <h1>Download <span class="gradient-text">aituner</span></h1>
+    <p class="lead">For Apple Silicon Macs (M1 and newer) running macOS 14 or later. Releases are signed with a Developer ID and notarized by Apple.</p>
+    <p class="lead" data-release hidden>Latest version <strong data-version></strong>, released <span data-date></span>.</p>
+  </div>
+</section>
+
+<section class="band band-flush">
+  <div class="wrap">
+    <div class="notice" data-prerelease hidden>
+      <strong>The first release is on its way.</strong> The Homebrew command and the download below start working the moment it is published. Until then you can <a href="/docs/install/#source">build aituner from source</a>.
+    </div>
+    <div class="dl">
+      <div class="card">
+        <span class="tile t-orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5l6 6-6 6M12 19h8"/></svg></span>
+        <h2 class="h-card">Homebrew</h2>
+        <p>Recommended. Homebrew keeps aituner up to date with <code>brew upgrade</code>.</p>
+        <div class="cmd inline"><code><span class="p">$ </span>brew install --cask tonynv/tap/aituner</code><button class="copy" type="button" data-copy="brew install --cask tonynv/tap/aituner">Copy</button></div>
+      </div>
+      <div class="card">
+        <span class="tile t-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v12M6 11l6 6 6-6M4 21h16"/></svg></span>
+        <h2 class="h-card">Disk image</h2>
+        <p>Open it and drag aituner to Applications. aituner then keeps itself up to date, and asks first.</p>
+        <div class="cta-row start">
+          <a class="btn primary" data-dmg href="https://github.com/tonynv/aituner/releases/latest">Download .dmg <span data-size></span></a>
+          <a class="btn" data-zip href="https://github.com/tonynv/aituner/releases/latest">.zip</a>
+        </div>
+        <p class="sha" data-sha></p>
+      </div>
+    </div>
+    <div class="grid near">
+      <div class="card"><h3>Requirements</h3><p>An Apple Silicon Mac (M1 or later) with macOS 14 or later. 16 GB of memory or more is recommended for useful coding models; aituner shows what fits yours.</p></div>
+      <div class="card"><h3>Verify the download</h3><p>Each release lists SHA-256 checksums in <code>SHA256SUMS</code>, and the app is signed and notarized: <code>spctl --assess -v /Applications/aituner.app</code> should say "accepted".</p></div>
+      <div class="card"><h3>What's new</h3><p>Every release has notes on GitHub. <a data-notes href="https://github.com/tonynv/aituner/releases">Read the release notes</a>.</p></div>
+    </div>
+    <p class="muted after">Next: <a href="/docs/getting-started/">getting started</a> takes about ten minutes.</p>
+  </div>
+</section>

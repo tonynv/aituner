@@ -1,0 +1,28 @@
+<!-- {
+  "title": "Connect Claude Code, VS Code, Neovim and Vim to a local model",
+  "nav": "Editors and tools",
+  "order": 4,
+  "description": "Use a local MLX model from Claude Code, VS Code, Neovim, Vim with tmux or any OpenAI-compatible tool through aituner's gateway, with isolated profiles."
+} -->
+<h1>Editors and tools</h1>
+<p class="lede">aituner runs the model in <code>mlx_lm.server</code> and puts a gateway in front of it on <code>127.0.0.1:8747</code> that speaks both the OpenAI API and Anthropic's Messages API. Editors connect to the gateway with an API key.</p>
+<div class="window"><div class="bar"><i></i><i></i><i></i></div><img src="/assets/screens/editors.png" width="1024" height="653" loading="lazy" alt="Editor integrations in aituner"></div>
+
+<h2 id="setup">Setting up a tool</h2>
+<p>Start a model first, then choose a tool in <strong>Setup</strong>. aituner shows exactly what it will install and change and asks once. Each tool gets its own isolated profile: your own editor settings and dotfiles are never modified.</p>
+<div class="tablewrap"><table>
+  <thead><tr><th>Tool</th><th>What setup does</th></tr></thead>
+  <tbody>
+    <tr><td>Claude Code</td><td>An <code>aituner-claude</code> launcher that points one session at the gateway; <code>~/.claude</code> is untouched. It runs lean by default, so a request is about 1,800 tokens and the first reply takes seconds.</td></tr>
+    <tr><td>VS Code</td><td>An isolated profile with Continue and the Claude Code extension, launched as <code>aituner-code</code>.</td></tr>
+    <tr><td>Neovim</td><td>Its own profile (<code>NVIM_APPNAME</code>) with lazy.nvim and CodeCompanion, launched as <code>aituner-nvim</code>.</td></tr>
+    <tr><td>Vim + tmux</td><td>Homebrew Vim with vim-ai, in a tmux layout with a chat pane and the model log. Your <code>~/.vimrc</code> is read, never written.</td></tr>
+    <tr><td>OpenAI-compatible</td><td>Connection details and a key file for Continue, Cline, Aider, Open WebUI, scripts or curl.</td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="claude-code">A note on Claude Code</h2>
+<p>Anthropic does not support routing Claude Code to non-Claude models. It works through aituner's gateway, which understands the tool-call formats of Llama, Qwen and gpt-oss and repairs tool arguments against their schemas, but local models are slower with Claude Code's large prompts and less reliable with tools. Larger coding models work best.</p>
+
+<h2 id="api">Using the API directly</h2>
+<p>The Setup page shows the base URL, the model name and a copyable key, plus a ready-made curl example. The gateway only forwards a safe set of request fields, so a client cannot make the server load a different model.</p>

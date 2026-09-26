@@ -51,7 +51,7 @@
   <section class="card stack tight" aria-label="Links">
     <div class="row"><Icon name="external" /><h3>Links</h3></div>
     <div class="row">
-      <a class="btn small" href="https://tonynv.github.io/aituner/" target="_blank" rel="noopener noreferrer">Documentation</a>
+      <a class="btn small" href="https://aituner.pages.dev/" target="_blank" rel="noopener noreferrer">Documentation</a>
       <a class="btn small" href="https://github.com/tonynv/aituner/releases" target="_blank" rel="noopener noreferrer">Releases</a>
       <a class="btn small" href="https://github.com/tonynv/aituner/issues" target="_blank" rel="noopener noreferrer">Report an issue</a>
     </div>

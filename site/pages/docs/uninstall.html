@@ -1,0 +1,25 @@
+<!-- {
+  "title": "Uninstall aituner",
+  "nav": "Uninstall",
+  "order": 10,
+  "description": "Remove aituner from your Mac with Homebrew or by hand, including its app data, launchers and any tuning changes, while keeping your downloaded models."
+} -->
+<h1>Uninstall</h1>
+<p class="lede">Removing aituner leaves your downloaded models where they are, unless you delete them too.</p>
+
+<h2 id="first">Before you start</h2>
+<p>If you applied a tuning change and chose to keep it across restarts, revert it on the Tune page first. Quit aituner (menu bar icon, Quit).</p>
+
+<h2 id="homebrew">Installed with Homebrew</h2>
+<pre><code>brew uninstall --cask --zap aituner</code></pre>
+<p><code>--zap</code> also removes aituner's app data, preferences, web storage, editor launchers and settings, and its launch agents. It does not touch your models, reports or knowledge base folders.</p>
+
+<h2 id="manual">Installed from the disk image or source</h2>
+<ol>
+  <li>Move <code>/Applications/aituner.app</code> to the Trash.</li>
+  <li>Delete <code>~/Library/Application Support/aituner</code> (history, settings, logs and the MLX environment).</li>
+  <li>Optionally delete the editor launchers in <code>~/.local/bin</code> (<code>aituner-claude</code>, <code>aituner-code</code>, <code>aituner-nvim</code>, <code>aituner-vim</code>, <code>aituner-tmux</code>, <code>aituner-chat</code>) and <code>~/.config/aituner</code>.</li>
+</ol>
+
+<h2 id="models">Models</h2>
+<p>Downloaded models stay in your models folder (<code>~/Models</code> by default). Clear them first in Storage if you want aituner to remove only the ones it downloaded, or delete the folders yourself.</p>

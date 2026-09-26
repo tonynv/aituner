@@ -1,0 +1,32 @@
+<!-- {
+  "title": "Getting started with aituner",
+  "nav": "Getting started",
+  "order": 2,
+  "description": "From first launch to a local AI model answering in your editor: scan your Mac, bootstrap MLX, download a model, start it and connect Claude Code or VS Code."
+} -->
+<h1>Getting started</h1>
+<p class="lede">About ten minutes from first launch to a model answering in your editor, most of it the model download.</p>
+
+<h2 id="scan">1. The scan</h2>
+<p>Every launch starts with a live scan of your Mac. Each line is a real detection command with its timing; the profile at the end shows the machine, chip, cores, memory, storage, power and installed runtimes. Press Return, or wait a moment, to continue to <strong>Hardware</strong>.</p>
+<div class="window"><div class="bar"><i></i><i></i><i></i></div><img src="/assets/screens/hardware.png" width="1440" height="420" loading="lazy" alt="The Hardware page for a Mac Studio"></div>
+
+<h2 id="bootstrap">2. Bootstrap</h2>
+<p>Open <strong>Setup</strong> and press <strong>Bootstrap</strong>. It lists exactly what it will do, then does it after you confirm:</p>
+<ul>
+  <li>Create your models, reports and knowledge base folders if they do not exist (change them first in <a href="/docs/storage/">Storage</a> if you want them elsewhere).</li>
+  <li>Install or update MLX and mlx-lm in a private Python environment that belongs to aituner.</li>
+  <li>Install macmon with Homebrew for live power and temperature readings.</li>
+</ul>
+
+<h2 id="model">3. Pick a model</h2>
+<p>Open <strong>Downloads</strong>. Discover lists models ranked for your Mac, each with a memory bar that shows the weights, the runtime and how much room is left for context. Search, filter by coding, chat or image, and press <strong>Add to queue</strong>. Downloads run in the background, one at a time; the Queue shows progress. See <a href="/docs/models/">Models</a>.</p>
+
+<h2 id="start">4. Start it</h2>
+<p>In <strong>Setup</strong>, choose the model and press <strong>Start model</strong>. aituner switches to <strong>Monitor</strong> once it is serving, so you can watch it load and the GPU work.</p>
+
+<h2 id="editor">5. Connect your editor</h2>
+<p>Back in Setup, choose a tool under Connect your tools. aituner shows exactly what it will install and change, asks once, then sets it up with its own profile and opens it on your project. See <a href="/docs/editors/">Editors and tools</a>.</p>
+
+<h2 id="background">6. Keep it running</h2>
+<p>Close the window: aituner and your model keep running in the menu bar. Click the gauge icon for the live model and GPU, or to open aituner again. Quit stops everything cleanly, including the model.</p>

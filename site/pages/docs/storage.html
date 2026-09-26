@@ -1,0 +1,27 @@
+<!-- {
+  "title": "Where aituner keeps models, reports and data",
+  "nav": "Storage",
+  "order": 6,
+  "description": "Choose where aituner stores models, reports and the knowledge base, including a NAS, see its app data, and clear downloaded models or reports safely."
+} -->
+<h1>Storage</h1>
+<p class="lede">Everything aituner keeps on your Mac is on the Storage page, where you can move it, open it in Finder or clear it.</p>
+
+<h2 id="folders">Folders</h2>
+<div class="tablewrap"><table>
+  <thead><tr><th>Folder</th><th>Default</th><th>Holds</th></tr></thead>
+  <tbody>
+    <tr><td>Models</td><td><code>~/Models</code></td><td>Downloaded models.</td></tr>
+    <tr><td>Reports</td><td><code>~/Reports</code></td><td>Benchmark reports saved with Save to folder (Markdown, CSV, JSON).</td></tr>
+    <tr><td>Knowledge base</td><td><code>~/KnowledgeBase</code></td><td>Documents for the knowledge base feature.</td></tr>
+    <tr><td>App data</td><td><code>~/Library/Application Support/aituner</code></td><td>Run history, settings, logs and the private MLX environment. Not movable.</td></tr>
+  </tbody>
+</table></div>
+<p>A folder must be inside your home folder or on an external drive. Folders that do not exist yet are created by Bootstrap, after you confirm; looking at Storage never creates anything. A network share mounted in your home folder (for example a NAS at <code>~/Models</code>) works.</p>
+
+<h2 id="clear">Clearing data</h2>
+<p><strong>Clear models or reports</strong> shows exactly what would go before anything is deleted:</p>
+<ul>
+  <li><strong>Models</strong>: only the folders aituner downloaded, each checked for aituner's download marker. Anything else in the folder is left alone, and a running model is stopped first.</li>
+  <li><strong>Reports</strong>: every benchmark run, its results, tuning history and model speed tests. Report files already saved to the reports folder stay. This is refused while a tuning change is still applied, because its record is what reverts it.</li>
+</ul>

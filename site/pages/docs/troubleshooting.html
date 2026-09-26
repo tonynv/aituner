@@ -1,0 +1,28 @@
+<!-- {
+  "title": "aituner troubleshooting",
+  "nav": "Troubleshooting",
+  "order": 11,
+  "description": "Fixes for common aituner problems: MLX not installed, a model that will not start, slow replies, editors that cannot connect, and update or download issues."
+} -->
+<h1>Troubleshooting</h1>
+
+<h2 id="mlx">MLX is not installed</h2>
+<p>Run <strong>Bootstrap</strong> in Setup, or <strong>Install MLX for Mac</strong> on the same page. aituner installs MLX into its own private Python environment; it needs Python 3 from Homebrew.</p>
+
+<h2 id="wont-start">A model will not start</h2>
+<p>Setup shows the model server's log. The most common cause is memory: another app or model is using the GPU memory the model needs. Quit other models (including Ollama, from its entry in the sidebar), or choose a smaller model; Downloads shows what fits.</p>
+
+<h2 id="slow">Replies are slow</h2>
+<p>Check <strong>Monitor</strong>: if the GPU is not busy, the prompt may be very long. With Claude Code, use the <code>aituner-claude</code> launcher, which sends about 1,800 tokens per request instead of about 27,700. Measure speeds in Downloads, On this Mac, and prefer the recommended model.</p>
+
+<h2 id="editor">An editor cannot connect</h2>
+<p>A model must be running: editors talk to aituner's gateway, which is up only while a model is served. Check the base URL and key on the Setup page, and set up the tool again if you changed models.</p>
+
+<h2 id="download">A download stopped</h2>
+<p>Open Downloads, Queue: failed items can be retried and resume where they stopped. Check the free space shown for your models folder; a network share must be mounted.</p>
+
+<h2 id="update">An update did not install</h2>
+<p>aituner refuses any download that fails its checks, and says why. Check your connection and try <strong>Check for Updates</strong> again, or download the release from the <a href="/download/">download page</a>. Homebrew installs update with <code>brew upgrade --cask aituner</code>.</p>
+
+<h2 id="more">Still stuck?</h2>
+<p>aituner's log is at <code>~/Library/Application Support/aituner/aituner.log</code>. Open an issue on <a href="https://github.com/tonynv/aituner/issues">GitHub</a> with what you tried and the relevant lines.</p>

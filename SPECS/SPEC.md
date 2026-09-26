@@ -529,7 +529,13 @@ Findings along the way: `--tools` does not add tools back under `--bare`; the su
   requires arm64 and macOS 14, quits the app before uninstalling, and its `zap` removes only what aituner creates (app
   data, WebKit storage, preferences, launchers, `~/.config/aituner`, its launchd jobs), never models, reports or the
   knowledge base.
-- **Docs site:** `docs/` (static HTML/CSS with the app's tokens, dark/light, responsive), deployed to Cloudflare Pages
+- **Website:** `site/` (owner request: "professional and stunning", docs, install, download link, good SEO). A
+  dependency-free generator (`site/build.mjs`) wraps `site/pages/**` in one layout and writes per-page title,
+  description, canonical, Open Graph/Twitter tags, JSON-LD (WebSite, SoftwareApplication, FAQPage, TechArticle,
+  BreadcrumbList), sitemap.xml, robots.txt, a 404 page and Cloudflare `_headers` (strict CSP with the one inline script
+  hashed, no framing). 15 pages: home, download (latest release read live from GitHub; a notice until the first
+  release), docs overview and 11 topics. The site address is one setting (SITE_URL / repository variable). Share image
+  source: `site/og/og.html`. Deployed to Cloudflare Pages
   (project "aituner"; owner request: Cloudflare, not GitHub Pages) by `.github/workflows/pages.yml` when a release is
   published, so the page always describes a real signed release. Secrets: CLOUDFLARE_API_TOKEN (Account > Cloudflare
   Pages > Edit only), CLOUDFLARE_ACCOUNT_ID. Custom domain: the owner's (aituner.app recommended), attached in the

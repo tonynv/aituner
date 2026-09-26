@@ -1,0 +1,27 @@
+<!-- {
+  "title": "aituner security and privacy",
+  "nav": "Security and privacy",
+  "order": 9,
+  "description": "How aituner keeps local AI private: localhost only, a per-launch token, strict request checks, safe model downloads, verified updates and no telemetry."
+} -->
+<h1>Security and privacy</h1>
+<p class="lede">aituner can change system settings and runs a local server, so it is locked down by default.</p>
+
+<h2 id="privacy">What stays on your Mac</h2>
+<p>Your prompts, code and results. Models run locally. aituner contacts only canirun.ai and Hugging Face (model information and the files of models you choose) and GitHub (update checks). There is no account and no telemetry.</p>
+
+<h2 id="server">The local server</h2>
+<ul>
+  <li>Listens on <code>127.0.0.1</code> only. A random 256-bit session token is created at each launch and exchanged once, through a single-use link, for an HttpOnly, SameSite=Strict cookie; every API call needs it.</li>
+  <li>A Host allow-list against DNS rebinding, an Origin check on every change, a strict Content Security Policy, and no CORS.</li>
+  <li>The API accepts change keys only. Values are recomputed from measurements, and privileged scripts are built from constants and checked against a character allow-list. Admin rights are requested with the standard macOS prompt; aituner never sees your password.</li>
+</ul>
+
+<h2 id="downloads">Downloads</h2>
+<p>Model downloads fetch safetensors, config and tokenizer files only, never Python code or pickles, and <code>trust_remote_code</code> is never enabled. Only models the recommender offered can be downloaded. Updates are installed only after the signature, notarization and checksum checks described in <a href="/docs/updates/">Updates</a>.</p>
+
+<h2 id="data">Your data on disk</h2>
+<p>App data lives in a folder only you can read (0700); the database, logs and cached images are 0600. Every state-changing request is recorded in aituner's log.</p>
+
+<h2 id="report">Reporting a problem</h2>
+<p>Please report security issues through <a href="https://github.com/tonynv/aituner/issues">GitHub issues</a>.</p>

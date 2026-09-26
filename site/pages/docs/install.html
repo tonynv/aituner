@@ -1,0 +1,32 @@
+<!-- {
+  "title": "Install aituner on your Mac",
+  "nav": "Install",
+  "order": 1,
+  "description": "Install aituner on an Apple Silicon Mac with Homebrew, the signed disk image, or from source. Requirements, verification and first launch."
+} -->
+<h1>Install aituner</h1>
+<p class="lede">aituner runs on Apple Silicon Macs (M1 and newer) with macOS 14 or later. Pick the way you prefer; all three give you the same app.</p>
+
+<h2 id="homebrew">With Homebrew (recommended)</h2>
+<pre><code>brew install --cask tonynv/tap/aituner</code></pre>
+<p>Homebrew installs aituner in Applications and keeps it current with <code>brew upgrade --cask aituner</code>. If you do not have Homebrew, get it from <a href="https://brew.sh">brew.sh</a>.</p>
+
+<h2 id="dmg">With the disk image</h2>
+<ol>
+  <li>Download the latest <code>aituner-&lt;version&gt;.dmg</code> from the <a href="/download/">download page</a>.</li>
+  <li>Open it and drag <strong>aituner</strong> onto <strong>Applications</strong>.</li>
+  <li>Open aituner from Applications. To keep it in the Dock, right-click its Dock icon and choose Options, Keep in Dock.</li>
+</ol>
+<p>Releases are signed with a Developer ID and notarized by Apple, so macOS opens them without warnings. To check a download yourself:</p>
+<pre><code>shasum -a 256 aituner-&lt;version&gt;.dmg      # compare with SHA256SUMS on the release
+spctl --assess -v /Applications/aituner.app  # should say: accepted, source=Notarized Developer ID</code></pre>
+
+<h2 id="source">From source</h2>
+<p>You need <a href="https://brew.sh">Homebrew</a> and the Xcode Command Line Tools (<code>xcode-select --install</code>). The build script installs or updates Go, Node and Python itself.</p>
+<pre><code>git clone https://github.com/tonynv/aituner
+cd aituner
+./build_app.sh --install</code></pre>
+<p>This builds <code>aituner.app</code> and copies it into Applications. A build from source is signed for your Mac only, and it does not update itself: pull and run the script again. To run aituner in a terminal instead of as an app, use <code>./run_aituner.sh</code>.</p>
+
+<h2 id="first-launch">First launch</h2>
+<p>aituner opens its window and puts a gauge icon in the menu bar. It starts with a scan of your Mac; then see <a href="/docs/getting-started/">Getting started</a>. Closing the window keeps aituner running in the menu bar; choose Quit from the menu bar icon or the aituner menu to stop it.</p>

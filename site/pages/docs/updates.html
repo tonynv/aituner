@@ -1,0 +1,26 @@
+<!-- {
+  "title": "How aituner updates itself",
+  "nav": "Updates",
+  "order": 7,
+  "description": "aituner checks GitHub for new releases, asks before updating, verifies the Developer ID signature, notarization and checksums, then installs and restarts."
+} -->
+<h1>Updates</h1>
+<p class="lede">aituner checks for new versions, asks before it updates, and installs only a release it can prove is genuine.</p>
+
+<h2 id="checking">Checking</h2>
+<p>A released copy of aituner checks GitHub 30 seconds after launch and then once a day. Turn this off on the <strong>About</strong> page; check any time with <strong>aituner, Check for Updates</strong> in the menu bar or on About.</p>
+
+<h2 id="prompt">The prompt</h2>
+<p>When a newer version is out, aituner asks: <strong>Update Now</strong>, <strong>Later</strong> or <strong>Skip This Version</strong>. A banner in the window offers the same, with a link to what is new.</p>
+
+<h2 id="verification">What is checked before installing</h2>
+<ul>
+  <li>The download matches both GitHub's recorded checksum and the release's <code>SHA256SUMS</code>.</li>
+  <li>The app inside is validly signed, by aituner's Developer ID team.</li>
+  <li>Apple has notarized it (Gatekeeper accepts it).</li>
+  <li>It is aituner, at exactly the version the release advertises.</li>
+</ul>
+<p>If any check fails, nothing changes. When all pass, aituner quits, the new version replaces the old one, and aituner opens again. The old copy is kept until the new one is in place and put back if anything goes wrong.</p>
+
+<h2 id="homebrew">Homebrew and source builds</h2>
+<p>If you installed with Homebrew, updating runs <code>brew upgrade --cask aituner</code> in Terminal so Homebrew stays in charge. Builds from source do not replace themselves: pull and run <code>./build_app.sh --install</code> again.</p>

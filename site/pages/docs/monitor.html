@@ -1,0 +1,27 @@
+<!-- {
+  "title": "Monitor GPU, power and temperature on Apple Silicon",
+  "nav": "Monitor",
+  "order": 5,
+  "description": "aituner's Monitor shows live GPU use and frequency, CPU, power, temperatures and memory on Apple Silicon without admin rights, plus a menu bar panel."
+} -->
+<h1>Monitor</h1>
+<p class="lede">Live performance of your Mac, updated every second, with the running model beside it.</p>
+<div class="window"><div class="bar"><i></i><i></i><i></i></div><img src="/assets/screens/monitor.png" width="1440" height="900" loading="lazy" alt="aituner's Monitor with a model running"></div>
+
+<h2 id="readings">What it shows</h2>
+<ul>
+  <li>GPU use and frequency, CPU use, memory and swap.</li>
+  <li>Power for the whole system and for the GPU, CPU and Neural Engine.</li>
+  <li>GPU and CPU temperatures.</li>
+  <li>The last five minutes as charts, and the running model with its memory and uptime.</li>
+</ul>
+<p>These readings come from <a href="https://github.com/vladkens/macmon">macmon</a>, which reads the same counters as <code>powermetrics</code> without admin rights; Bootstrap installs it. Without macmon, aituner's own sampler shows GPU use and memory only, and marks the rest as unavailable rather than guessing.</p>
+
+<h2 id="menubar">Menu bar</h2>
+<p>Click the gauge icon in the menu bar for a panel with the live model, a GPU meter, the last minute of GPU use, memory, power and temperature. It also opens the main window or quits aituner.</p>
+
+<h2 id="background">In the background</h2>
+<p>Monitoring runs while you look at it, and whenever a model is being served, even with the window closed. It stops by itself when neither is true.</p>
+
+<h2 id="terminal">Terminal monitors</h2>
+<p>Monitor can install and open full-screen terminal monitors built for Apple Silicon: macmon, mactop, and nvtop (whose Apple support is limited, as its own documentation says). None needs admin rights.</p>
