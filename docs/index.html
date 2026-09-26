@@ -33,6 +33,7 @@
     <span class="eyebrow">For Apple Silicon Macs</span>
     <h1>Local AI on your Mac,<br />tuned and running in minutes.</h1>
     <p class="lead">aituner scans your Mac, recommends models that actually fit it, downloads and runs them with MLX, connects your editor, and shows the GPU working live. A native Mac app with a menu bar monitor. Everything stays on your Mac.</p>
+    <p class="note" id="prerelease" hidden>The first signed release is on its way: the install command and download work as soon as it is published. Until then, <a href="#source">build it from source</a> in two commands.</p>
     <div class="cmd"><code><span class="prompt">$ </span>brew install --cask tonynv/tap/aituner</code><button class="copy" data-copy="brew install --cask tonynv/tap/aituner">Copy</button></div>
     <div class="cta">
       <a class="btn primary" href="https://github.com/tonynv/aituner/releases/latest">Download for Mac</a>
@@ -75,7 +76,7 @@
         <div class="card"><h3>Homebrew</h3><p>Recommended. Updates with <code>brew upgrade</code>.</p>
           <div class="cmd"><code>brew install --cask tonynv/tap/aituner</code><button class="copy" data-copy="brew install --cask tonynv/tap/aituner">Copy</button></div></div>
         <div class="card"><h3>Download</h3><p>Get <code>aituner-&lt;version&gt;.dmg</code> from the <a href="https://github.com/tonynv/aituner/releases/latest">latest release</a>, open it and drag aituner to Applications. Checksums are in <code>SHA256SUMS</code>.</p></div>
-        <div class="card"><h3>From source</h3><p>Needs Homebrew and the Xcode Command Line Tools. The script installs Go, Node and Python if missing.</p>
+        <div class="card" id="source"><h3>From source</h3><p>Needs Homebrew and the Xcode Command Line Tools. The script installs Go, Node and Python if missing.</p>
           <pre><code>git clone https://github.com/tonynv/aituner
 cd aituner && ./build_app.sh --install</code></pre></div>
       </div>
@@ -185,6 +186,10 @@ cd aituner && ./build_app.sh --install</code></pre></div>
       setTimeout(() => { b.textContent = 'Copy'; b.classList.remove('done'); }, 1600);
     });
   }
+  // until the first release exists, say so (the check is GitHub's public API; nothing else is loaded from elsewhere)
+  fetch('https://api.github.com/repos/tonynv/aituner/releases/latest', { headers: { Accept: 'application/vnd.github+json' } })
+    .then((r) => { if (r.status === 404) document.getElementById('prerelease').hidden = false; })
+    .catch(() => {});
   document.getElementById('theme').addEventListener('click', () => {
     const root = document.documentElement;
     const dark = root.dataset.theme ? root.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
