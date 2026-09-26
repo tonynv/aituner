@@ -1,23 +1,23 @@
 <!doctype html>
-<!-- Source of the social share image (assets/og.png, 1200x630): rendered once in a browser and saved as PNG. -->
+<!-- Source of the social share image (assets/og.png, 1200x630), rendered in a browser and saved as PNG.
+     Same system as the site: black and white, square, 1px rules, no gradients. -->
 <html><head><meta charset="utf-8"><style>
-  html,body{margin:0;width:1200px;height:630px;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Helvetica Neue',Arial,sans-serif}
-  body{background:radial-gradient(60% 80% at 15% 20%,#3b1aa8 0%,transparent 60%),radial-gradient(55% 70% at 85% 30%,#0e7490 0%,transparent 60%),linear-gradient(135deg,#0b0620,#07121f);color:#fff;position:relative}
-  .left{position:absolute;left:72px;top:88px;width:520px}
-  .icon{width:112px;height:112px;border-radius:26px;box-shadow:0 20px 60px rgba(76,31,214,.55)}
-  h1{font-size:88px;line-height:1;margin:36px 0 18px;letter-spacing:-.03em;font-weight:800}
-  p{font-size:31px;line-height:1.3;margin:0;color:#cfd3ff;font-weight:500}
-  .tag{margin-top:34px;display:inline-block;font-size:21px;color:#e7e9ff;border:1px solid rgba(255,255,255,.25);border-radius:999px;padding:8px 18px}
-  .shot{position:absolute;left:640px;top:96px;width:760px;border-radius:14px;overflow:hidden;box-shadow:0 40px 90px rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.18);transform:perspective(1400px) rotateY(-12deg) rotateX(3deg);transform-origin:left center}
-  .bar{height:30px;background:#1c1c24;display:flex;gap:8px;align-items:center;padding:0 12px}.bar i{width:11px;height:11px;border-radius:50%;display:block}
-  .bar i:nth-child(1){background:#ff5f57}.bar i:nth-child(2){background:#febc2e}.bar i:nth-child(3){background:#28c840}
-  .shot img{display:block;width:100%}
+  html,body{margin:0;width:1200px;height:630px;overflow:hidden;background:#0a0a0a;color:#f2f2f2;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Helvetica Neue',Arial,sans-serif}
+  .rule{position:absolute;left:64px;right:64px;height:1px;background:#262626}
+  .left{position:absolute;left:64px;top:72px;width:520px}
+  .mark{display:flex;align-items:center;gap:14px;font-size:30px;font-weight:600;letter-spacing:-.02em}
+  h1{font-size:74px;line-height:.98;letter-spacing:-.035em;font-weight:700;margin:72px 0 0}
+  .label{position:absolute;left:64px;bottom:56px;font:500 17px ui-monospace,'SF Mono',Menlo,monospace;letter-spacing:.14em;text-transform:uppercase;color:#a0a0a0}
+  .url{position:absolute;right:64px;bottom:56px;font:500 17px ui-monospace,'SF Mono',Menlo,monospace;color:#a0a0a0}
+  .shot{position:absolute;left:640px;top:72px;width:496px;height:420px;overflow:hidden;border:1px solid #3a3a3a}
+  .shot img{display:block;width:880px;margin:-1px 0 0 -1px}
 </style></head><body>
   <div class="left">
-    <img class="icon" src="../../web/public/icon.svg" alt="">
-    <h1>aituner</h1>
-    <p>Local AI on your Mac,<br>tuned and running.</p>
-    <span class="tag">Native app for Apple Silicon · MLX</span>
+    <div class="mark"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#f2f2f2" stroke-width="1.4"><rect x="5.5" y="5.5" width="13" height="13"/><path d="M9 2.5v3M15 2.5v3M9 18.5v3M15 18.5v3M2.5 9h3M2.5 15h3M18.5 9h3M18.5 15h3M8 13h2l1.5-3 2 5 1.5-2h1"/></svg>aituner</div>
+    <h1>Local AI on your Mac, tuned and running.</h1>
   </div>
-  <div class="shot"><div class="bar"><i></i><i></i><i></i></div><img src="../assets/screens/monitor.png" alt=""></div>
+  <div class="shot"><img src="../assets/screens/monitor.png" alt=""></div>
+  <div class="rule" style="bottom:104px"></div>
+  <div class="label">macOS · Apple Silicon · MLX</div>
+  <div class="url">aituner.app</div>
 </body></html>

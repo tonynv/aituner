@@ -12,88 +12,93 @@
 } -->
 <section class="hero">
   <div class="wrap">
-    <img class="icon" src="/assets/icon.svg" alt="The aituner app icon" width="104" height="104">
-    <div><span class="eyebrow"><i></i>Built for Apple Silicon</span></div>
-    <h1>Local AI on your Mac,<br><span class="gradient-text">tuned and running.</span></h1>
-    <p class="lead">aituner finds the AI models that really fit your Mac, runs them on the GPU with MLX, connects your editor, and shows you every watt and token. A native Mac app. Nothing leaves your machine.</p>
+    <span class="label">macOS · Apple Silicon · MLX</span>
+    <h1>Local AI on your Mac, tuned and running.</h1>
+    <p class="lead">aituner finds the models that fit your Mac, runs them on the GPU with MLX, connects your editor, and shows exactly what the hardware is doing. A native Mac app. Nothing leaves your machine.</p>
     <div class="cta-row">
-      <a class="btn primary" href="/download/"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12M6 11l6 6 6-6M4 21h16"/></svg>Download for Mac</a>
+      <a class="btn primary" href="/download/">Download for Mac</a>
       <a class="btn" href="/docs/getting-started/">Get started</a>
     </div>
     <div class="cmd"><code><span class="p">$ </span>brew install --cask tonynv/tap/aituner</code><button class="copy" type="button" data-copy="brew install --cask tonynv/tap/aituner">Copy</button></div>
-    <p class="req">macOS 14 or later · Apple Silicon (M1 and newer) · Signed and notarized</p>
+    <p class="req">macOS 14+ · M1 or newer · Signed and notarized</p>
     <p class="req" data-prerelease hidden>The first release is on its way. Until then, <a href="/docs/install/#source">build it from source</a>.</p>
-    <div class="hero-shot window"><div class="bar"><i></i><i></i><i></i></div><img src="/assets/screens/monitor.png" width="1440" height="900" alt="aituner's Monitor showing a Qwen coding model running, with live GPU, CPU, memory, power and temperature charts" fetchpriority="high"></div>
+    <div class="shot"><img src="/assets/screens/monitor.png" width="1440" height="900" alt="aituner's Monitor showing a Qwen coding model running, with live GPU, CPU, memory, power and temperature" fetchpriority="high"></div>
   </div>
 </section>
 
 <section class="works" aria-label="Works with">
   <div class="wrap">
-    <p>Connects to the tools you already use</p>
+    <span class="label">Works with</span>
     <ul><li>Claude Code</li><li>VS Code</li><li>Neovim</li><li>Vim + tmux</li><li>Any OpenAI-compatible tool</li></ul>
   </div>
 </section>
 
 <section class="band" id="features">
   <div class="wrap">
-    <div class="center">
-      <p class="kicker gradient-text">Everything local AI needs</p>
-      <h2>From a fresh Mac to a model in your editor.</h2>
-      <p class="sub">aituner measures instead of guessing, asks before it changes anything, and keeps every step visible.</p>
-    </div>
-
-    <div class="feature first">
-      <div class="text">
-        <h3>Knows your Mac, precisely</h3>
-        <p>Every launch opens with a live scan of the real machine: chip, CPU and GPU cores, unified memory, storage, power, thermals and the runtimes installed.</p>
-        <ul><li>Read directly from macOS, every time</li><li>The GPU memory budget models can actually use</li><li>Your Mac's own picture and specs at a glance</li></ul>
-      </div>
-      <div class="window"><div class="bar"><i></i><i></i><i></i></div><img src="/assets/screens/scan.png" width="1440" height="900" loading="lazy" alt="aituner's start-up scan listing each detection command with its timing, then the machine profile"></div>
-    </div>
-
-    <div class="feature flip">
-      <div class="text">
-        <h3>Models that actually fit</h3>
-        <p>Ranked by canirun.ai, resolved to Apple Silicon MLX builds on Hugging Face, and sized against your memory budget, so you see the weights, the runtime and how much context still fits before you download.</p>
-        <ul><li>Search coding, chat and image models</li><li>A background download queue, verified and resumable</li><li>Measured reading and writing speed on your Mac</li></ul>
-      </div>
-      <div class="window"><div class="bar"><i></i><i></i><i></i></div><img src="/assets/screens/models.png" width="1440" height="900" loading="lazy" alt="aituner's model catalog with categories, fit grades and a memory bar for each model"></div>
+    <div class="head">
+      <div><span class="label">Features</span><h2>From a fresh Mac to a model in your editor.</h2></div>
+      <p>aituner measures instead of guessing, asks before it changes anything, and keeps every step visible.</p>
     </div>
 
     <div class="feature">
       <div class="text">
-        <h3>Your editor, connected in one step</h3>
-        <p>Choose a tool and aituner shows exactly what it will install and change, asks once, then sets it up with its own isolated profile. A local gateway speaks both the OpenAI and Anthropic Messages APIs.</p>
-        <ul><li>Claude Code, VS Code, Neovim, Vim + tmux</li><li>Your own editor settings are never modified</li><li>Tool calls repaired for Llama, Qwen and gpt-oss formats</li></ul>
+        <span class="num">01 — Scan</span>
+        <h3>Knows your Mac, precisely</h3>
+        <p>Every launch opens with a live scan of the real machine: chip, CPU and GPU cores, unified memory, storage, power, thermals and installed runtimes.</p>
+        <ul><li>Read directly from macOS, every time</li><li>The GPU memory budget models can really use</li><li>Each detection command shown with its timing</li></ul>
       </div>
-      <div class="window"><div class="bar"><i></i><i></i><i></i></div><img src="/assets/screens/editors.png" width="1024" height="653" loading="lazy" alt="aituner's editor integrations for Claude Code, VS Code, Neovim, Vim and tmux, and OpenAI-compatible tools"></div>
+      <div class="frame"><img src="/assets/screens/scan.png" width="1440" height="900" loading="lazy" alt="aituner's start-up scan listing each detection command with its timing, then the machine profile"></div>
     </div>
 
-    <div class="grid">
-      <div class="card"><span class="tile t-green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg></span><h3>Live GPU monitor</h3><p>GPU use and frequency, power, temperatures and memory every second, plus a menu bar panel with the live model.</p></div>
-      <div class="card"><span class="tile t-indigo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5l6 6-6 6M12 19h8"/></svg></span><h3>Bootstrap in one click</h3><p>Creates your folders and installs MLX and the live-stats tool after one confirmation, shown as it happens.</p></div>
-      <div class="card"><span class="tile t-orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 18a8 8 0 1 1 16 0M12 18l4-6"/></svg></span><h3>Benchmark and tune</h3><p>Measure bandwidth, compute and model speed, review every system change before it is applied, and see real before and after.</p></div>
-      <div class="card"><span class="tile t-pink"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/></svg></span><h3>Your storage, your rules</h3><p>Put models, reports and the knowledge base anywhere, including a NAS, and clear what aituner created with a preview.</p></div>
-      <div class="card"><span class="tile t-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 11a8 8 0 0 0-14-4M4 4v4h4M4 13a8 8 0 0 0 14 4M20 20v-4h-4"/></svg></span><h3>Verified updates</h3><p>New versions are checked against their Developer ID signature, Apple notarization and checksums before they install.</p></div>
-      <div class="card"><span class="tile t-teal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></svg></span><h3>Private by design</h3><p>Runs on 127.0.0.1 only with a per-launch key. No account, no telemetry, and your prompts never leave your Mac.</p></div>
+    <div class="feature">
+      <div class="text">
+        <span class="num">02 — Models</span>
+        <h3>Models that actually fit</h3>
+        <p>Ranked by canirun.ai, resolved to Apple Silicon MLX builds on Hugging Face, and sized against your memory budget: the weights, the runtime and the context that still fits, before you download.</p>
+        <ul><li>Coding, chat and image models</li><li>A background queue, verified and resumable</li><li>Reading and writing speed measured on your Mac</li></ul>
+      </div>
+      <div class="frame"><img src="/assets/screens/models.png" width="1440" height="900" loading="lazy" alt="aituner's model catalog with categories, fit grades and a memory bar for each model"></div>
+    </div>
+
+    <div class="feature">
+      <div class="text">
+        <span class="num">03 — Editors</span>
+        <h3>Your editor, connected in one step</h3>
+        <p>Choose a tool and aituner shows exactly what it will install and change, asks once, then sets it up with its own isolated profile. A local gateway speaks the OpenAI and Anthropic Messages APIs.</p>
+        <ul><li>Claude Code, VS Code, Neovim, Vim + tmux</li><li>Your own editor settings are never modified</li><li>Tool calls repaired for Llama, Qwen and gpt-oss</li></ul>
+      </div>
+      <div class="frame"><img src="/assets/screens/editors.png" width="1024" height="653" loading="lazy" alt="aituner's editor integrations for Claude Code, VS Code, Neovim, Vim and tmux, and OpenAI-compatible tools"></div>
+    </div>
+  </div>
+</section>
+
+<section class="band flush">
+  <div class="wrap">
+    <div class="cells">
+      <div><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg></span><h3>Live GPU monitor</h3><p>GPU use and frequency, power, temperatures and memory every second, and a menu bar panel with the live model.</p></div>
+      <div><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 5l6 6-6 6M12 19h8"/></svg></span><h3>Bootstrap in one step</h3><p>Creates your folders and installs MLX and the live-stats tool after one confirmation, shown as it runs.</p></div>
+      <div><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 18a8 8 0 1 1 16 0M12 18l4-6"/></svg></span><h3>Benchmark and tune</h3><p>Measure bandwidth, compute and model speed, review each system change before it is applied, compare before and after.</p></div>
+      <div><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 7h16v12H4zM4 7l2-3h12l2 3"/></svg></span><h3>Your storage, your rules</h3><p>Keep models, reports and the knowledge base anywhere, including a NAS, and clear what aituner created with a preview.</p></div>
+      <div><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M20 11a8 8 0 0 0-14-4M4 4v4h4M4 13a8 8 0 0 0 14 4M20 20v-4h-4"/></svg></span><h3>Verified updates</h3><p>New versions are checked against their Developer ID signature, Apple notarization and checksums before they install.</p></div>
+      <div><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></svg></span><h3>Private by design</h3><p>Runs on 127.0.0.1 only with a per-launch key. No account, no telemetry; your prompts never leave your Mac.</p></div>
     </div>
   </div>
 </section>
 
 <section class="band">
   <div class="wrap">
-    <div class="center">
-      <p class="kicker gradient-text">How it works</p>
-      <h2>Four steps, about ten minutes.</h2>
+    <div class="head">
+      <div><span class="label">How it works</span><h2>Four steps, about ten minutes.</h2></div>
+      <p>Most of it is the model download.</p>
     </div>
     <ol class="steps">
       <li><strong>Scan</strong><span>Open aituner. It detects your Mac and shows what it can run.</span></li>
-      <li><strong>Bootstrap</strong><span>One click creates your folders and installs MLX, after you confirm.</span></li>
+      <li><strong>Bootstrap</strong><span>One step creates your folders and installs MLX, after you confirm.</span></li>
       <li><strong>Pick a model</strong><span>Choose from models sized for your memory; it downloads in the background.</span></li>
-      <li><strong>Code</strong><span>Start it, connect your editor, and watch the GPU work on Monitor.</span></li>
+      <li><strong>Code</strong><span>Start it, connect your editor, and watch the GPU on Monitor.</span></li>
     </ol>
     <div class="duo">
-      <div class="window"><div class="bar"><i></i><i></i><i></i></div><img src="/assets/screens/hardware.png" width="1440" height="420" loading="lazy" alt="aituner's Hardware page for a Mac Studio with Apple M1 Max"></div>
+      <div class="frame"><img src="/assets/screens/hardware.png" width="1440" height="420" loading="lazy" alt="aituner's Hardware page for a Mac Studio with Apple M1 Max"></div>
       <div class="phone"><img src="/assets/screens/phone.png" width="390" height="844" loading="lazy" alt="aituner's Monitor at phone size in light mode"></div>
     </div>
   </div>
@@ -101,13 +106,12 @@
 
 <section class="band">
   <div class="wrap">
-    <div class="center">
-      <p class="kicker gradient-text">Private and careful</p>
-      <h2>Your Mac, your models, your call.</h2>
+    <div class="head">
+      <div><span class="label">Privacy</span><h2>Your Mac, your models, your call.</h2></div>
     </div>
-    <div class="privacy">
+    <div class="facts">
       <div><strong>Nothing leaves your Mac</strong>Models run locally. aituner talks only to canirun.ai and Hugging Face for model data, and to GitHub for updates.</div>
-      <div><strong>Nothing changes without you</strong>Every install and system change shows exactly what it does and waits for your confirmation. Each tuning change can be reverted.</div>
+      <div><strong>Nothing changes without you</strong>Every install and system change shows what it does and waits for your confirmation. Tuning changes can be reverted.</div>
       <div><strong>Locked down by default</strong>Local only, a single-use launch link, a strict content policy, and downloads limited to model weights, never code.</div>
     </div>
   </div>
@@ -115,7 +119,7 @@
 
 <section class="band" id="faq">
   <div class="wrap">
-    <div class="center"><h2>Questions</h2></div>
+    <div class="head"><div><span class="label">FAQ</span><h2>Questions</h2></div></div>
     <div class="faq">
       <details><summary>Which Macs does aituner support?</summary><div><p>Apple Silicon Macs (M1 and later) running macOS 14 or later. aituner runs models with MLX on the Apple GPU through Metal, which Intel Macs do not have.</p></div></details>
       <details><summary>Does aituner send my prompts or code anywhere?</summary><div><p>No. Models run on your Mac. aituner only contacts canirun.ai and Hugging Face for model information and the files of the model you choose, and GitHub to check for updates. There is no account and no telemetry.</p></div></details>
@@ -129,8 +133,7 @@
 
 <section class="band final">
   <div class="wrap">
-    <h2>Put your Mac to work.</h2>
-    <p class="sub">For Apple Silicon Macs running macOS 14 or later.</p>
+    <div><span class="label">Download</span><h2>Put your Mac to work.</h2><p class="lead">For Apple Silicon Macs running macOS 14 or later.</p></div>
     <div class="cta-row"><a class="btn primary" href="/download/">Download aituner</a><a class="btn" href="/docs/">Read the docs</a></div>
   </div>
 </section>
