@@ -21,6 +21,8 @@ final class Server {
     private var waiting: [(URL) -> Void] = [] // callers waiting for a link, in request order (main thread only)
     private(set) var port = 0
     var onExit: ((Int32, String) -> Void)?
+    /// Any other line from the server: ("update", "0.2.0"), ("uptodate", "0.1.0"), ("update-error", msg), ("quit", "").
+    var onEvent: ((String, String) -> Void)?
     var stopping = false
 
     init(executable: URL) {
@@ -67,15 +69,26 @@ final class Server {
         try? stdin.fileHandleForWriting.write(contentsOf: Data("\n".utf8))
     }
 
+    /// Sends a command line to the server ("check", "update", "skip 0.2.0").
+    func send(_ command: String) {
+        guard proc.isRunning, !command.contains("\n") else { return }
+        try? stdin.fileHandleForWriting.write(contentsOf: Data((command + "\n").utf8))
+    }
+
     private func consume(_ d: Data) {
         outBuf.append(d)
         while let nl = outBuf.firstIndex(of: 0x0A) {
             let line = String(decoding: outBuf[outBuf.startIndex..<nl], as: UTF8.self)
             outBuf.removeSubrange(outBuf.startIndex...nl)
-            guard line.hasPrefix("link "), let url = URL(string: String(line.dropFirst(5))),
-                  url.scheme == "http", url.host == "127.0.0.1", let p = url.port else { continue }
-            port = p
-            if !waiting.isEmpty { waiting.removeFirst()(url) }
+            if line.hasPrefix("link ") {
+                guard let url = URL(string: String(line.dropFirst(5))), url.scheme == "http", url.host == "127.0.0.1",
+                      let p = url.port else { continue }
+                port = p
+                if !waiting.isEmpty { waiting.removeFirst()(url) }
+            } else {
+                let parts = line.split(separator: " ", maxSplits: 1).map(String.init)
+                if let verb = parts.first { onEvent?(verb, parts.count > 1 ? parts[1] : "") }
+            }
         }
     }
 
@@ -189,6 +202,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
             let detail = stderr.split(separator: "\n").last.map(String.init) ?? "exit status \(status)"
             self.fail("aituner stopped unexpectedly.\n\n\(detail)")
         }
+        server.onEvent = { [weak self] verb, arg in self?.handle(verb, arg) }
         do {
             try server.start { [weak self] url in self?.showWindow(loading: url) }
         } catch {
@@ -220,6 +234,67 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         alert.alertStyle = .warning
         alert.runModal()
         NSApp.terminate(nil)
+    }
+
+    // MARK: software update
+
+    private var manualCheck = false
+    private var installing = false
+
+    @objc func checkForUpdates(_ sender: Any?) {
+        manualCheck = true
+        server?.send("check")
+    }
+
+    private func handle(_ verb: String, _ arg: String) {
+        switch verb {
+        case "update":
+            manualCheck = false
+            promptUpdate(version: arg)
+        case "uptodate":
+            if manualCheck { inform("aituner is up to date", "You have the latest version (\(arg)).") }
+            manualCheck = false
+        case "update-error":
+            if manualCheck || installing { inform("The update did not complete", arg) }
+            manualCheck = false
+            installing = false
+        case "quit":
+            // an update is verified and staged: quit so the helper can swap it in and relaunch
+            server?.stopping = true
+            NSApp.terminate(nil)
+        default:
+            break
+        }
+    }
+
+    private func promptUpdate(version: String) {
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate()
+        let current = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
+        let alert = NSAlert()
+        alert.messageText = "aituner \(version) is available"
+        alert.informativeText = "You have \(current). The update is downloaded from GitHub, checked (Developer ID signature and Apple notarization) and installed, then aituner restarts. A running model is stopped."
+        alert.addButton(withTitle: "Update Now")
+        alert.addButton(withTitle: "Later")
+        alert.addButton(withTitle: "Skip This Version")
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:
+            installing = true
+            server?.send("update")
+        case .alertThirdButtonReturn:
+            server?.send("skip \(version)")
+        default:
+            break
+        }
+        if window?.isVisible != true { NSApp.setActivationPolicy(.accessory) }
+    }
+
+    private func inform(_ title: String, _ text: String) {
+        NSApp.activate()
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = text
+        alert.runModal()
     }
 
     // MARK: window
@@ -331,6 +406,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         }
         sub("aituner", [
             item("About aituner", #selector(NSApplication.orderFrontStandardAboutPanel(_:))),
+            {
+                let i = item("Check for Updates…", #selector(checkForUpdates(_:)))
+                i.target = self
+                return i
+            }(),
             .separator(),
             item("Hide aituner", #selector(NSApplication.hide(_:)), "h"),
             item("Hide Others", #selector(NSApplication.hideOtherApplications(_:)), "h", [.command, .option]),
