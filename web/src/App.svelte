@@ -12,6 +12,7 @@
   import Storage from './steps/Storage.svelte';
   import About from './steps/About.svelte';
   import UpdateActions from './lib/UpdateActions.svelte';
+  import ServiceSheet from './lib/ServiceSheet.svelte';
   import PinnedStats from './lib/PinnedStats.svelte';
   import BootScan from './lib/BootScan.svelte';
   import { app, start, phaseTab, perfUnlocked, PERF_TABS, act } from './lib/app.svelte.js';
@@ -65,6 +66,8 @@
 
   // phones: bottom tab bar (main path + More); everything else lives in the More sheet
   let moreSheet;
+  let serviceSheet;
+  function openService(id) { moreSheet?.close(); serviceSheet.open(id); }
   const MORE = [
     { tab: 'benchmark', tile: 'orange', label: 'Benchmark', icon: 'gauge' },
     { tab: 'tune', tile: 'purple', label: 'Tune', icon: 'sliders' },
@@ -123,11 +126,11 @@
 {#snippet serviceList()}
   <ul class="services" aria-label="Tools and services">
     {#each app.services as sv (sv.id)}
-      <li title="{sv.name}: {sv.detail}">
+      <li><button onclick={() => openService(sv.id)} title="{sv.name}: {sv.detail}. Details and actions">
         <span class="dot" class:on={sv.active} class:idle={sv.installed && !sv.active} aria-hidden="true"></span>
         <span class="sname">{sv.name}</span>
         <span class="sdetail">{sv.active ? 'active' : sv.installed ? 'idle' : 'off'}</span>
-      </li>
+      </button></li>
     {/each}
   </ul>
 {/snippet}
@@ -135,13 +138,13 @@
 <!-- Native-style layouts: on a Mac-sized window a sidebar of sections (System Settings, Finder) beside the content; on a
      phone an iOS layout: a pinned, blurred header with the section title, a bottom tab bar and a More sheet. -->
 <header class="mhead">
-  <button class="mbrand" onclick={() => go('hardware')} aria-label="aituner home"><Icon name="gauge" size={18} /></button>
+  <button class="mbrand" onclick={() => go('hardware')} aria-label="aituner home"><img class="appicon" src="/icon.svg" alt="" width="24" height="24" /></button>
   <span class="mtitle" class:shown={compact}>{TITLES[app.tab] ?? 'aituner'}</span>
   <button class="mbtn" onclick={toggleTheme} aria-label="Toggle dark and light theme"><Icon name={dark ? 'sun' : 'moon'} size={20} /></button>
 </header>
 <div class="app">
   <aside class="sidebar">
-    <button class="brand" onclick={() => (app.tab = 'hardware')} aria-label="aituner home"><Icon name="gauge" size={18} /><span class="name">aituner</span></button>
+    <button class="brand" onclick={() => (app.tab = 'hardware')} aria-label="aituner home"><img class="appicon" src="/icon.svg" alt="" width="22" height="22" /><span class="name">aituner</span></button>
     {#if st && st.supported}
       <nav aria-label="Sections">
         <ul>{#each MAIN as s (s.tab)}{@render navItem(s)}{/each}</ul>
@@ -229,6 +232,8 @@
   <button class="btn done" onclick={() => moreSheet.close()}>Done</button>
 </dialog>
 
+<ServiceSheet bind:this={serviceSheet} />
+
 {#if scanning}<BootScan ondetected={detected} ondone={scanDone} />{/if}
 
 <dialog bind:this={newRunDialog} aria-labelledby="nr-title">
@@ -247,6 +252,7 @@
   .sidebar { position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; gap: 18px; padding: 16px 10px 12px; background: var(--surface); border-right: 1px solid var(--border); overflow-y: auto; }
   .brand { display: flex; align-items: center; gap: 8px; padding: 6px 8px; margin: -6px 0; font-weight: 600; font-size: 15px; border: 0; background: none; color: var(--text); cursor: pointer; border-radius: var(--radius); text-align: left; }
   .brand:hover { background: var(--border); }
+  .appicon { border-radius: 22%; display: block; }
   nav ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
   .group { margin: 16px 8px 6px; font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
   .opt { margin-left: 6px; font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--faint); }
@@ -266,7 +272,9 @@
   .machine { font-size: 12px; color: var(--muted); }
   /* status: green = working now, grey = installed and idle, hollow = not installed; the word says the same */
   .services { list-style: none; margin: 0; padding: 10px 0 0; border-top: 1px solid var(--border); display: grid; gap: 4px; }
-  .services li { display: grid; grid-template-columns: 10px 1fr auto; gap: 8px; align-items: center; font-size: 12px; }
+  .services li button { display: grid; grid-template-columns: 10px 1fr auto; gap: 8px; align-items: center; width: 100%; min-height: 26px; padding: 0 6px; margin: 0 -6px; border: 0; border-radius: var(--radius); background: none; color: inherit; font-size: 12px; text-align: left; cursor: pointer; box-sizing: content-box; }
+  .services li button:hover { background: var(--border); }
+  @media (pointer: coarse) { .services li button { min-height: var(--tap); } }
   .dot { width: 8px; height: 8px; border-radius: 50%; border: 1px solid var(--border-strong); }
   .dot.idle { background: var(--faint); border-color: var(--faint); }
   .dot.on { background: var(--ok); border-color: var(--ok); box-shadow: 0 0 0 0 color-mix(in srgb, var(--ok) 50%, transparent); animation: live 2s ease-out infinite; }
@@ -328,7 +336,7 @@
     .sheet-h { margin: 8px 16px 0; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.02em; }
     .group-box { background: var(--surface); border-radius: 10px; padding: 12px 14px; }
     .group-box .services { border: 0; padding: 0; gap: 10px; font-size: 15px; }
-    .group-box .services li { font-size: 15px; }
+    .group-box .services li button { font-size: 15px; min-height: 40px; }
     .sheet-foot { margin: 0 16px; font-size: 13px; color: var(--muted); }
     .sheet .done { width: 100%; }
   }
