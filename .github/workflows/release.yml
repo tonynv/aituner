@@ -1,0 +1,115 @@
+# Builds, signs, notarizes and publishes aituner.app for Apple Silicon.
+#   push a tag vX.Y.Z  -> GitHub release with the notarized zip, dmg and SHA256SUMS, and the Homebrew cask updated
+#   run manually        -> the same build as a dry run: artifacts attached to the workflow run, nothing published
+# Secrets (set from secret_mgr with `gh secret set`): DEVELOPER_ID_P12_BASE64, DEVELOPER_ID_P12_PASSWORD,
+# NOTARY_KEY_P8_BASE64, NOTARY_KEY_ID, NOTARY_ISSUER_ID, HOMEBREW_TAP_TOKEN (contents:write on tonynv/homebrew-tap).
+name: release
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  AITUNER_TEAM_ID: KZWKV6U343
+
+jobs:
+  build:
+    runs-on: macos-26 # Apple Silicon (arm64), per actions/runner-images
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # tags and history: the build stamps the version and build number from them
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: latest
+
+      - name: Tag matches the release
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          test "$(git describe --tags --exact-match)" = "${GITHUB_REF_NAME}"
+
+      - name: Test
+        run: |
+          go vet ./cmd/... ./internal/...
+          go test -race -count=1 ./cmd/... ./internal/...
+          (cd web && npm ci --no-audit --no-fund && npm run check)
+
+      - name: Import the Developer ID certificate into a temporary keychain
+        env:
+          P12_BASE64: ${{ secrets.DEVELOPER_ID_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+        run: |
+          test -n "$P12_BASE64" || { echo "::error::DEVELOPER_ID_P12_BASE64 is not set"; exit 1; }
+          kc="$RUNNER_TEMP/signing.keychain-db"
+          kcpw=$(openssl rand -hex 24)
+          printf '%s' "$P12_BASE64" | base64 --decode > "$RUNNER_TEMP/devid.p12"
+          security create-keychain -p "$kcpw" "$kc"
+          security set-keychain-settings -lut 3600 "$kc"
+          security unlock-keychain -p "$kcpw" "$kc"
+          security import "$RUNNER_TEMP/devid.p12" -k "$kc" -P "$P12_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$kcpw" "$kc" >/dev/null
+          security list-keychains -d user | tr -d '" ' | xargs security list-keychains -d user -s "$kc" # ours first, keep the rest
+          rm -f "$RUNNER_TEMP/devid.p12"
+
+      - name: Build, sign and notarize
+        env:
+          NOTARY_KEY_P8_BASE64: ${{ secrets.NOTARY_KEY_P8_BASE64 }}
+          AITUNER_NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          AITUNER_NOTARY_ISSUER: ${{ secrets.NOTARY_ISSUER_ID }}
+          AITUNER_SKIP_UPDATES: "1" # the runner's toolchain was just set up; do not brew-upgrade it mid-build
+        run: |
+          export AITUNER_NOTARY_KEY="$RUNNER_TEMP/notary.p8"
+          printf '%s' "$NOTARY_KEY_P8_BASE64" | base64 --decode > "$AITUNER_NOTARY_KEY"
+          ./build_app.sh
+          rm -f "$AITUNER_NOTARY_KEY"
+          spctl --assess --type execute --verbose=2 dist/aituner.app
+          xcrun stapler validate dist/aituner.app
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: aituner-macos-arm64
+          path: |
+            dist/aituner-*.zip
+            dist/aituner-*.dmg
+            dist/SHA256SUMS
+          if-no-files-found: error
+
+      - name: Publish the GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/aituner-*.zip dist/aituner-*.dmg dist/SHA256SUMS \
+            --title "aituner $GITHUB_REF_NAME" --notes-file <(git tag -l --format='%(contents)' "$GITHUB_REF_NAME") --verify-tag
+
+      - name: Update the Homebrew cask
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          sha=$(awk '/\.zip$/ { print $1 }' dist/SHA256SUMS)
+          git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/tonynv/homebrew-tap.git" "$RUNNER_TEMP/tap"
+          cd "$RUNNER_TEMP/tap"
+          sed -i '' -e "s/^  version \".*\"/  version \"${version}\"/" -e "s/^  sha256 \".*\"/  sha256 \"${sha}\"/" Casks/aituner.rb
+          git -c user.name="aituner release" -c user.email="release@users.noreply.github.com" commit -am "aituner ${version}"
+          git push
+
+      - name: Remove the temporary keychain
+        if: always()
+        run: security delete-keychain "$RUNNER_TEMP/signing.keychain-db" 2>/dev/null || true

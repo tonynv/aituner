@@ -78,7 +78,7 @@
     <section class="card tiles" aria-label="Now">
       <Meter label="GPU" value={now.gpu_pct} text="{fmtNum(now.gpu_pct, 0)}%" sub={now.gpu_mhz ? `${now.gpu_mhz} MHz` : ''} />
       <Meter label="CPU" value={now.cpu_pct} text="{fmtNum(now.cpu_pct, 0)}%" />
-      <Meter label="Memory" value={now.ram_total ? now.ram_used : -1} max={now.ram_total || 1} text={fmtBytes(now.ram_used)} sub="of {fmtBytes(now.ram_total)}{now.swap_used > 0 ? `, swap ${fmtBytes(now.swap_used)}` : ''}" />
+      <Meter label="Memory" value={now.ram_total ? now.ram_used : -1} max={now.ram_total || 1} text={fmtBytes(now.ram_used)} sub="of {fmtBytes(now.ram_total)}" note={now.swap_used > 0 ? `swap in use: ${fmtBytes(now.swap_used)}` : ''} />
       {#if full}
         <div class="stat"><span class="l">Power</span><span class="v mono">{fmtNum(now.sys_w)}<span class="u">W system</span></span>
           <span class="muted small mono">GPU {fmtNum(now.gpu_w)} · CPU {fmtNum(now.cpu_w)} · ANE {fmtNum(now.ane_w)} W</span></div>
