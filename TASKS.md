@@ -100,4 +100,7 @@ Legend: [x] done, [~] partial, [ ] not done. Build order: DataStore -> API -> UI
 - [x] Tools and services sheet: details and confirmed actions (stop model, remove MLX, uninstall macmon, quit/uninstall Ollama)
 - [x] aituner brand goes home; new vibrant app icon from one SVG
 - [ ] Re-run the release gates on the merged work before tagging v0.1.0
-- [ ] Docs site on Cloudflare Pages with the owner's domain (aituner.app recommended): waiting for CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID and the domain
+- [x] Website (site/): 15 pages, SEO (per-page meta, canonical, OG/Twitter, JSON-LD, sitemap, robots), share image, CSP headers; verified in both themes and at phone width under its real headers
+- [ ] Deploy to Cloudflare Pages: secrets are set, but the token has Cloudflare Pages Read, not Edit (error 10000 on create); the owner changes it, then run the "docs" workflow
+- [ ] Custom domain (aituner.app recommended): attach in Cloudflare, then set the repository variable SITE_URL and redeploy
+- [ ] Roll the Cloudflare token (it was shown in the chat)
