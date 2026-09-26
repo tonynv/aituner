@@ -10,6 +10,8 @@
   import Run from './steps/Run.svelte';
   import Monitor from './steps/Monitor.svelte';
   import Storage from './steps/Storage.svelte';
+  import About from './steps/About.svelte';
+  import UpdateActions from './lib/UpdateActions.svelte';
   import PinnedStats from './lib/PinnedStats.svelte';
   import BootScan from './lib/BootScan.svelte';
   import { app, start, phaseTab, perfUnlocked, PERF_TABS, act } from './lib/app.svelte.js';
@@ -69,8 +71,9 @@
     { tab: 'rerun', tile: 'teal', label: 'Re-run', icon: 'refresh' },
     { tab: 'report', tile: 'blue', label: 'Report', icon: 'list' },
     { tab: 'storage', tile: 'pink', label: 'Storage', icon: 'disk' },
+    { tab: 'about', tile: 'graphite', label: 'About', icon: 'info' },
   ];
-  const TITLES = { hardware: 'Hardware', downloads: 'Downloads', setup: 'Setup', monitor: 'Monitor', benchmark: 'Benchmark', tune: 'Tune', rerun: 'Re-run', report: 'Report', storage: 'Storage' };
+  const TITLES = { hardware: 'Hardware', downloads: 'Downloads', setup: 'Setup', monitor: 'Monitor', benchmark: 'Benchmark', tune: 'Tune', rerun: 'Re-run', report: 'Report', storage: 'Storage', about: 'About' };
   const inMore = $derived(MORE.some((m) => m.tab === app.tab));
   function go(tab) { app.tab = tab; moreSheet?.close(); }
   // iOS large titles: the bar's small title fades in only once the page's own big title has scrolled under the bar
@@ -132,20 +135,20 @@
 <!-- Native-style layouts: on a Mac-sized window a sidebar of sections (System Settings, Finder) beside the content; on a
      phone an iOS layout: a pinned, blurred header with the section title, a bottom tab bar and a More sheet. -->
 <header class="mhead">
-  <span class="mbrand"><Icon name="gauge" size={16} /></span>
+  <button class="mbrand" onclick={() => go('hardware')} aria-label="aituner home"><Icon name="gauge" size={18} /></button>
   <span class="mtitle" class:shown={compact}>{TITLES[app.tab] ?? 'aituner'}</span>
   <button class="mbtn" onclick={toggleTheme} aria-label="Toggle dark and light theme"><Icon name={dark ? 'sun' : 'moon'} size={20} /></button>
 </header>
 <div class="app">
   <aside class="sidebar">
-    <div class="brand"><Icon name="gauge" size={18} /><span class="name">aituner</span></div>
+    <button class="brand" onclick={() => (app.tab = 'hardware')} aria-label="aituner home"><Icon name="gauge" size={18} /><span class="name">aituner</span></button>
     {#if st && st.supported}
       <nav aria-label="Sections">
         <ul>{#each MAIN as s (s.tab)}{@render navItem(s)}{/each}</ul>
         <p class="group">Performance<span class="opt">optional</span></p>
         <ul>{#each PERF as s (s.tab)}{@render navItem(s)}{/each}</ul>
         <p class="group">Settings</p>
-        <ul>{@render navItem({ tab: 'storage', tile: 'pink', label: 'Storage', icon: 'disk' })}</ul>
+        <ul>{@render navItem({ tab: 'storage', tile: 'pink', label: 'Storage', icon: 'disk' })}{@render navItem({ tab: 'about', tile: 'graphite', label: 'About', icon: 'info' })}</ul>
       </nav>
     {/if}
     <div class="foot">
@@ -163,6 +166,13 @@
       <div class="banner" role="alert"><Icon name="alert" size={16} /> {app.error}</div>
     {/if}
 
+    {#if app.update?.available && app.update.skipped !== app.update.latest.version && app.tab !== 'about'}
+      <div class="updbar" role="status">
+        <span><Icon name="download" size={16} /> <strong>aituner {app.update.latest.version}</strong> is available.</span>
+        <UpdateActions compact />
+      </div>
+    {/if}
+
     {#if st && st.supported}
       <PinnedStats {st} serve={app.serve} onreport={() => (app.tab = app.tab === 'report' ? 'hardware' : 'report')} onrun={() => (app.tab = 'setup')} />
     {/if}
@@ -174,6 +184,7 @@
         {#if app.tab === 'setup'}<Run {st} />
         {:else if app.tab === 'monitor'}<Monitor />
         {:else if app.tab === 'storage'}<Storage />
+        {:else if app.tab === 'about'}<About />
         {:else if app.tab === 'report'}<Report />
         {:else if app.tab === 'downloads'}<Downloads {st} onnext={() => (app.tab = 'setup')} />
         {:else if app.tab === 'benchmark'}<Benchmark {st} />
@@ -234,7 +245,8 @@
     /* the sidebar column's colour and divider run the full page height, however long the content is */
     background: linear-gradient(to right, var(--surface) 0 223px, var(--border) 223px 224px, var(--bg) 224px); }
   .sidebar { position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; gap: 18px; padding: 16px 10px 12px; background: var(--surface); border-right: 1px solid var(--border); overflow-y: auto; }
-  .brand { display: flex; align-items: center; gap: 8px; padding: 0 8px; font-weight: 600; font-size: 15px; }
+  .brand { display: flex; align-items: center; gap: 8px; padding: 6px 8px; margin: -6px 0; font-weight: 600; font-size: 15px; border: 0; background: none; color: var(--text); cursor: pointer; border-radius: var(--radius); text-align: left; }
+  .brand:hover { background: var(--border); }
   nav ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
   .group { margin: 16px 8px 6px; font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
   .opt { margin-left: 6px; font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--faint); }
@@ -263,6 +275,8 @@
   .sdetail { color: var(--muted); }
   .tools { display: flex; gap: 8px; }
   .content { min-width: 0; max-width: 1080px; width: 100%; padding: 0 28px 48px; }
+  .updbar { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-top: 12px; padding: 10px 14px; border: 1px solid var(--accent); border-radius: var(--radius); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+  .updbar > span { display: inline-flex; gap: 8px; align-items: center; }
   .banner { display: flex; gap: 8px; align-items: center; margin-top: 16px; padding: 12px 14px; border: 1px solid var(--bad); color: var(--bad); border-radius: var(--radius); }
   main { padding-top: 20px; }
   dialog { background: var(--surface); color: var(--text); border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 20px; max-width: min(520px, calc(100vw - 32px)); }
@@ -284,7 +298,7 @@
       padding: var(--safe-t) calc(8px + var(--safe-r)) 0 calc(8px + var(--safe-l)); min-height: calc(44px + var(--safe-t));
       background: color-mix(in srgb, var(--bg) 78%, transparent); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px);
       border-bottom: 0.5px solid var(--border); }
-    .mbrand { display: inline-flex; justify-content: center; color: var(--muted); }
+    .mbrand { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border: 0; background: none; color: var(--text); cursor: pointer; }
     .mtitle { text-align: center; font-weight: 600; font-size: 17px; opacity: 0; transition: opacity 0.2s; }
     .mtitle.shown { opacity: 1; }
     .mbtn { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border: 0; background: none; color: var(--accent-text); cursor: pointer; }

@@ -5,6 +5,7 @@ export const app = $state({
   state: null,
   serve: null, // model-server status, polled with the state so every tab can show it
   services: [], // tools and services for the sidebar: installed, active
+  update: null, // software update status (checked by the server; this only reads it)
   error: null, // connection / fatal
   tab: 'hardware', // what is on screen; every launch starts at the hardware home page
   detected: false, // this page load has run detection (the server re-detects on request)
@@ -15,7 +16,7 @@ export const app = $state({
 
 // Main path: hardware -> downloads -> setup -> monitor. Benchmark, tune and re-run are an optional performance track that
 // follows the server's phase; a tab unlocks once the run has reached it.
-export const TABS = ['hardware', 'downloads', 'setup', 'monitor', 'storage', 'benchmark', 'tune', 'rerun', 'report'];
+export const TABS = ['hardware', 'downloads', 'setup', 'monitor', 'storage', 'about', 'benchmark', 'tune', 'rerun', 'report'];
 export const PERF_TABS = ['benchmark', 'tune', 'rerun'];
 const PHASE_TAB = { detected: 'hardware', baseline_running: 'benchmark', baseline_done: 'tune', tune_reviewed: 'rerun', tuned_running: 'rerun', tuned_done: 'rerun' };
 export const phaseTab = () => (app.state && PHASE_TAB[app.state.phase]) || 'hardware';
@@ -32,6 +33,7 @@ export async function refresh() {
     app.error = null;
     api.serve().then((v) => (app.serve = v)).catch(() => {});
     api.services().then((v) => (app.services = v.services)).catch(() => {});
+    api.updateStatus().then((v) => (app.update = v)).catch(() => {});
   } catch (e) {
     app.error = e.status === 401 ? 'Session expired. Reopen aituner from its terminal window (press o).' : 'Cannot reach aituner. Is it still running?';
   }
