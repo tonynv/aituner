@@ -4,12 +4,15 @@ package httpx
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"time"
 )
@@ -122,10 +125,63 @@ func (c *Client) once(ctx context.Context, method string, u *url.URL, body []byt
 		if resp.StatusCode == http.StatusTooManyRequests {
 			return fmt.Errorf("%s is rate limiting requests (HTTP 429); wait a few minutes and retry", u.Host), wait, true
 		}
-		return fmt.Errorf("%s %s: %s", method, u.Host+u.Path, resp.Status), wait, retryable(resp.StatusCode)
+		return &StatusError{Code: resp.StatusCode, Msg: fmt.Sprintf("%s %s: %s", method, u.Host+u.Path, resp.Status)}, wait, retryable(resp.StatusCode)
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, MaxBody)).Decode(out); err != nil {
 		return fmt.Errorf("%s: invalid JSON response: %w", u.Host, err), 0, false
 	}
 	return nil, 0, false
+}
+
+// StatusError is a non-200 response, so callers can tell "not found" from a failure.
+type StatusError struct {
+	Code int
+	Msg  string
+}
+
+func (e *StatusError) Error() string { return e.Msg }
+
+// Download streams an allow-listed HTTPS URL into a new file dst (created 0600, never overwriting), refusing bodies
+// over max bytes, and returns the SHA-256 (hex) and size of what it wrote. A partial file is removed on any error.
+func (c *Client) Download(ctx context.Context, rawURL, dst string, max int64) (string, int64, error) {
+	u, err := c.check(rawURL)
+	if err != nil {
+		return "", 0, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	if err != nil {
+		return "", 0, err
+	}
+	req.Header.Set("User-Agent", c.UA)
+	req.Header.Set("Accept", "application/octet-stream")
+	dl := *c.HTTP
+	dl.Timeout = 30 * time.Minute // a whole download; the connection itself still has the transport's timeouts
+	resp, err := dl.Do(req)
+	if err != nil {
+		return "", 0, fmt.Errorf("%s: %w", u.Host, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", 0, &StatusError{Code: resp.StatusCode, Msg: fmt.Sprintf("GET %s: %s", u.Host+u.Path, resp.Status)}
+	}
+	if resp.ContentLength > max {
+		return "", 0, fmt.Errorf("%s is %d bytes, more than the %d allowed", u.Path, resp.ContentLength, max)
+	}
+	f, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return "", 0, err
+	}
+	h := sha256.New()
+	n, err := io.Copy(io.MultiWriter(f, h), io.LimitReader(resp.Body, max+1))
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err == nil && n > max {
+		err = fmt.Errorf("%s is larger than the %d bytes allowed", u.Path, max)
+	}
+	if err != nil {
+		_ = os.Remove(dst)
+		return "", 0, err
+	}
+	return hex.EncodeToString(h.Sum(nil)), n, nil
 }

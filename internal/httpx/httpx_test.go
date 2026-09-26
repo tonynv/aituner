@@ -2,9 +2,14 @@ package httpx
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -111,5 +116,41 @@ func TestContextCancelStopsRetries(t *testing.T) {
 	t0 := time.Now()
 	if err := c.JSON(ctx, "GET", ts.URL, nil, &struct{}{}); err == nil || time.Since(t0) > 2*time.Second {
 		t.Fatalf("err=%v elapsed=%v", err, time.Since(t0))
+	}
+}
+
+func TestDownloadHashesCapsAndNeverOverwrites(t *testing.T) {
+	body := strings.Repeat("aituner", 1000)
+	c, u := setup(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/missing" {
+			w.WriteHeader(404)
+			return
+		}
+		w.Write([]byte(body))
+	})
+	dir := t.TempDir()
+	sum, n, err := c.Download(context.Background(), u+"/f", filepath.Join(dir, "a"), 1<<20)
+	want := sha256.Sum256([]byte(body))
+	if err != nil || n != int64(len(body)) || sum != hex.EncodeToString(want[:]) {
+		t.Fatalf("%v %d %s", err, n, sum)
+	}
+	if fi, _ := os.Stat(filepath.Join(dir, "a")); fi.Mode().Perm() != 0o600 {
+		t.Fatalf("mode %v", fi.Mode())
+	}
+	if _, _, err := c.Download(context.Background(), u+"/f", filepath.Join(dir, "a"), 1<<20); err == nil {
+		t.Fatal("overwrote an existing file")
+	}
+	if _, _, err := c.Download(context.Background(), u+"/f", filepath.Join(dir, "b"), 100); err == nil {
+		t.Fatal("accepted a body over the cap")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "b")); !os.IsNotExist(err) {
+		t.Fatal("left a partial file behind")
+	}
+	var se *StatusError
+	if _, _, err := c.Download(context.Background(), u+"/missing", filepath.Join(dir, "c"), 100); !errors.As(err, &se) || se.Code != 404 {
+		t.Fatalf("want a 404 StatusError: %v", err)
+	}
+	if _, _, err := c.Download(context.Background(), "https://example.com/x", filepath.Join(dir, "d"), 100); err == nil {
+		t.Fatal("downloaded from a host outside the allow-list")
 	}
 }
