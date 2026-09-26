@@ -34,7 +34,7 @@ brew install --cask tonynv/tap/aituner
 ```
 
 Or download `aituner-<version>.dmg` from the [latest release](https://github.com/tonynv/aituner/releases/latest). Releases are
-built by GitHub Actions, signed with a Developer ID and notarized by Apple. Documentation: https://aituner.pages.dev/
+built by GitHub Actions, signed with a Developer ID and notarized by Apple. Documentation: https://aituner.app/ · Contact: info@aituner.app
 
 To build the app yourself:
 

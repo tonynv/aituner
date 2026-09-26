@@ -27,7 +27,7 @@ jobs:
 
       - name: Build the site
         env:
-          SITE_URL: ${{ vars.SITE_URL || 'https://aituner.pages.dev' }}
+          SITE_URL: ${{ vars.SITE_URL || 'https://aituner.app' }}
         run: node site/build.mjs
 
       - name: Create the Pages project (first run only; fails harmlessly when it exists)

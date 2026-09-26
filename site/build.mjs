@@ -8,7 +8,8 @@ import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = dirname(fileURLToPath(import.meta.url));
-const SITE = (process.argv[2] || process.env.SITE_URL || 'https://aituner.pages.dev').replace(/\/$/, '');
+const SITE = (process.argv[2] || process.env.SITE_URL || 'https://aituner.app').replace(/\/$/, '');
+const EMAIL = 'info@aituner.app';
 const REPO = 'https://github.com/tonynv/aituner';
 const out = join(root, 'dist');
 const today = new Date().toISOString().slice(0, 10);
@@ -53,6 +54,7 @@ const app = {
   image: SITE + '/assets/og.png',
   screenshot: SITE + '/assets/screens/monitor.png',
   softwareRequirements: 'Apple Silicon Mac (M1 or later), macOS 14 or later',
+  author: { '@type': 'Organization', name: 'aituner', url: SITE + '/', email: EMAIL, contactPoint: { '@type': 'ContactPoint', email: EMAIL, contactType: 'customer support' } },
 };
 
 const nav = [
@@ -128,7 +130,7 @@ ${ld.map(jsonld).join('\n')}
 <a class="skip" href="#main">Skip to content</a>
 <header class="top">
   <div class="wrap">
-    <a class="logo" href="/" aria-label="aituner home"><img src="/assets/icon.svg" alt="" width="28" height="28">aituner</a>
+    <a class="logo" href="/" aria-label="aituner home"><svg class="mark" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="5.5" y="5.5" width="13" height="13"/><path d="M9 2.5v3M15 2.5v3M9 18.5v3M15 18.5v3M2.5 9h3M2.5 15h3M18.5 9h3M18.5 15h3M8 13h2l1.5-3 2 5 1.5-2h1"/></svg>aituner</a>
     <nav class="links" aria-label="Main">
       ${nav.map(([u, n]) => `<a href="${u}"${p.path.startsWith(u) && u !== '/#features' ? ' aria-current="page"' : ''}>${n}</a>`).join('')}
       <a href="${REPO}" rel="noopener">GitHub</a>
@@ -142,10 +144,10 @@ ${main}
 </main>
 <footer class="foot">
   <div class="wrap">
-    <div class="fbrand"><img src="/assets/icon.svg" alt="" width="24" height="24"><span>aituner</span><p>Local AI on your Mac, tuned and running.</p></div>
+    <div class="fbrand"><span>aituner</span><p>Local AI on your Mac, tuned and running.</p></div>
     <nav aria-label="Product"><h2>Product</h2><a href="/#features">Features</a><a href="/download/">Download</a><a href="${REPO}/releases">Release notes</a></nav>
     <nav aria-label="Docs"><h2>Docs</h2>${docs.slice(0, 5).map((d) => `<a href="${d.path}">${esc(d.nav || d.title)}</a>`).join('')}</nav>
-    <nav aria-label="Project"><h2>Project</h2><a href="${REPO}">Source code</a><a href="${REPO}/issues">Report an issue</a><a href="${REPO}/blob/main/SPECS/SPEC.md">Specification</a></nav>
+    <nav aria-label="Project"><h2>Project</h2><a href="${REPO}">Source code</a><a href="${REPO}/issues">Report an issue</a><a href="mailto:${EMAIL}">${EMAIL}</a></nav>
   </div>
 </footer>
 <script src="/assets/site.js" defer></script>

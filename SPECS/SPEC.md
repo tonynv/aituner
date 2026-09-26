@@ -538,8 +538,8 @@ Findings along the way: `--tools` does not add tools back under `--bare`; the su
   source: `site/og/og.html`. Deployed to Cloudflare Pages
   (project "aituner"; owner request: Cloudflare, not GitHub Pages) by `.github/workflows/pages.yml` when a release is
   published, so the page always describes a real signed release. Secrets: CLOUDFLARE_API_TOKEN (Account > Cloudflare
-  Pages > Edit only), CLOUDFLARE_ACCOUNT_ID. Custom domain: the owner's (aituner.app recommended), attached in the
-  dashboard.
+  Pages > Edit only), CLOUDFLARE_ACCOUNT_ID. Domain: aituner.app (attached in the Cloudflare dashboard);
+  contact info@aituner.app (site footer, security page, structured data, the app's About page).
 
 ### 16.13 Software update (owner request: "prompt and upgrade when a new version is on GitHub")
 
