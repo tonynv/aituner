@@ -70,7 +70,14 @@
   $effect(() => {
     load(); pollLogs();
     let stop = false, t;
-    const tick = async () => { await load(); if (live) await pollLogs(); await refresh(); if (!stop) t = setTimeout(tick, state === 'starting' ? 1000 : 2500); };
+    // check `stop` after every await: Setup may have been closed meanwhile (starting a model switches to Monitor), and its
+    // derived values must not be read once it is gone
+    const tick = async () => {
+      await load(); if (stop) return;
+      if (live) { await pollLogs(); if (stop) return; }
+      await refresh(); if (stop) return;
+      t = setTimeout(tick, state === 'starting' ? 1000 : 2500);
+    };
     t = setTimeout(tick, 1000);
     return () => { stop = true; clearTimeout(t); };
   });
