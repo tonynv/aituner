@@ -4,12 +4,16 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 
 	"github.com/tonynv/aituner/internal/bench"
 	"github.com/tonynv/aituner/internal/connect"
 	"github.com/tonynv/aituner/internal/modeldir"
 	"github.com/tonynv/aituner/internal/monitor"
 	"github.com/tonynv/aituner/internal/serve"
+	"github.com/tonynv/aituner/internal/tools"
+	"github.com/tonynv/aituner/internal/tune"
 )
 
 // service is one tool or service aituner uses, for the sidebar: installed, and active (doing work now).
@@ -75,6 +79,187 @@ func modelBase(repo string) string {
 
 func (s *Server) handleServices(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"services": s.services()})
+}
+
+// ---- per-service details and actions (the sidebar's service sheet) ----------------------------------------------------
+
+type serviceAction struct {
+	ID      string `json:"id"`      // stop | remove
+	Label   string `json:"label"`   // button text
+	Confirm string `json:"confirm"` // exactly what happens, shown before it runs
+	Option  string `json:"option,omitempty"`
+}
+
+type serviceDetail struct {
+	service
+	Info    []string        `json:"info"`
+	Actions []serviceAction `json:"actions"`
+	Note    string          `json:"note,omitempty"`
+}
+
+func (s *Server) serviceDetail(ctx context.Context, id string) (serviceDetail, bool) {
+	var d serviceDetail
+	found := false
+	for _, sv := range s.services() {
+		if sv.ID == id {
+			d.service, found = sv, true
+		}
+	}
+	if !found {
+		return d, false
+	}
+	d.Info, d.Actions = []string{}, []serviceAction{}
+	hw := s.hardware()
+	st := s.serve.Status()
+	serving := st.State != serve.StateStopped && st.State != serve.StateError
+	switch id {
+	case "model", "gateway":
+		if serving {
+			d.Info = append(d.Info, "Serving "+st.Repo)
+			d.Actions = append(d.Actions, serviceAction{ID: "stop", Label: "Stop the model", Confirm: "Stops the model server and the gateway. Editors connected to aituner lose their model until you start one again in Setup."})
+		} else {
+			d.Note = "Start a model in Setup."
+		}
+	case "mlx":
+		if hw != nil && hw.Software.MLX.Ready {
+			d.Info = append(d.Info, "mlx "+hw.Software.MLX.MLX+", mlx-lm "+hw.Software.MLX.MLXLM, "Private environment: "+hw.Software.MLX.VenvPath)
+			if serving {
+				d.Note = "Stop the model before removing MLX."
+			} else {
+				d.Actions = append(d.Actions, serviceAction{ID: "remove", Label: "Remove MLX", Confirm: "Moves aituner's private MLX environment to the Trash. Downloaded models stay. Bootstrap in Setup installs MLX again."})
+			}
+		}
+	case "macmon":
+		if d.Installed && tools.MacmonFromBrew() {
+			d.Actions = append(d.Actions, serviceAction{ID: "remove", Label: "Uninstall macmon", Confirm: "Runs brew uninstall macmon. Monitor falls back to aituner's own sampler (GPU use and memory only)."})
+		} else if d.Installed {
+			d.Note = "macmon was not installed with Homebrew; remove it the way it was installed."
+		}
+	case "ollama":
+		env, _, _ := s.connectEnv(ctx)
+		home, _ := os.UserHomeDir()
+		o := tools.FindOllama(ctx, env.Run, home, tune.OllamaCLILink)
+		d.Info = append(d.Info, "Optional: aituner never installs Ollama. On Apple Silicon, aituner runs models with MLX.")
+		switch o.Kind {
+		case "app":
+			d.Info = append(d.Info, "Installed as "+o.Path)
+		case "brew-cask", "brew-formula":
+			d.Info = append(d.Info, "Installed with Homebrew ("+o.Kind+")")
+		}
+		if o.ModelsGB > 0 {
+			d.Info = append(d.Info, fmt.Sprintf("Ollama's models: %.1f GB in %s", o.ModelsGB, o.Models))
+		}
+		if d.Active {
+			d.Actions = append(d.Actions, serviceAction{ID: "stop", Label: "Quit Ollama", Confirm: "Quits Ollama and its server. It starts again when you open it."})
+		}
+		if o.Kind != "" {
+			how := "Quits Ollama and moves Ollama.app to the Trash (you can restore it from there)."
+			if o.Kind != "app" {
+				how = "Quits Ollama and runs brew uninstall" + map[bool]string{true: " --cask", false: ""}[o.Kind == "brew-cask"] + " ollama."
+			}
+			if o.CLILink {
+				how += " macOS asks for your password once to remove its command-line link, " + tune.OllamaCLILink + "."
+			}
+			opt := ""
+			if o.ModelsGB > 0 {
+				opt = fmt.Sprintf("Also move Ollama's models to the Trash (%.1f GB)", o.ModelsGB)
+			}
+			d.Actions = append(d.Actions, serviceAction{ID: "remove", Label: "Uninstall Ollama", Confirm: how, Option: opt})
+		}
+	}
+	return d, true
+}
+
+func (s *Server) handleServiceDetail(w http.ResponseWriter, r *http.Request) {
+	d, ok := s.serviceDetail(r.Context(), r.PathValue("id"))
+	if !ok {
+		writeErr(w, http.StatusNotFound, "unknown_service", "unknown service")
+		return
+	}
+	writeJSON(w, http.StatusOK, d)
+}
+
+// handleServiceAction runs one of the actions serviceDetail offered (it is re-derived here, never taken on trust).
+func (s *Server) handleServiceAction(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Confirm bool `json:"confirm"`
+		Option  bool `json:"option"`
+	}
+	if !decode(w, r, &req) {
+		return
+	}
+	id, action := r.PathValue("id"), r.PathValue("action")
+	d, ok := s.serviceDetail(r.Context(), id)
+	if !ok {
+		writeErr(w, http.StatusNotFound, "unknown_service", "unknown service")
+		return
+	}
+	offered := false
+	for _, a := range d.Actions {
+		offered = offered || a.ID == action
+	}
+	if !offered {
+		writeErr(w, http.StatusConflict, "not_available", "that action is not available for "+d.Name+" now")
+		return
+	}
+	if !req.Confirm {
+		writeErr(w, http.StatusBadRequest, "needs_confirmation", "confirm the action")
+		return
+	}
+	s.cfg.Log("audit: service " + id + " " + action)
+	if (id == "model" || id == "gateway") && action == "stop" {
+		s.stopGateway()
+		s.serve.Stop()
+		writeJSON(w, http.StatusOK, map[string]string{"status": "done"})
+		return
+	}
+	home, _ := os.UserHomeDir()
+	trash := filepath.Join(home, ".Trash")
+	env, _, err := s.connectEnv(r.Context())
+	if err != nil {
+		writeErr(w, 500, "connect", err.Error())
+		return
+	}
+	err = s.jobs.start(s.ctx, "service", func(ctx context.Context, emit bench.Emit) error {
+		say := func(m string) { emit(bench.Event{Level: "info", Message: m}) }
+		switch id + " " + action {
+		case "mlx remove":
+			dst, err := tools.RemoveMLX(s.cfg.DataDir, trash)
+			if err != nil {
+				return err
+			}
+			say("moved the MLX environment to the Trash (" + dst + ")")
+		case "macmon remove":
+			if err := tools.RemoveMacmon(ctx, env.Run, say); err != nil {
+				return err
+			}
+		case "ollama stop":
+			o := tools.FindOllama(ctx, env.Run, home, tune.OllamaCLILink)
+			if err := tools.StopOllama(ctx, env.Run, o, say); err != nil {
+				return err
+			}
+			say("Ollama stopped")
+		case "ollama remove":
+			o := tools.FindOllama(ctx, env.Run, home, tune.OllamaCLILink)
+			if err := tools.RemoveOllama(ctx, env.Run, o, req.Option, trash, say); err != nil {
+				return err
+			}
+			if o.CLILink {
+				if err := tune.RemoveOllamaCLILink(ctx); err != nil {
+					emit(bench.Event{Level: "warn", Message: "command-line link left in place: " + err.Error()})
+				}
+			}
+			_ = tune.RemoveOllamaAgent(ctx) // aituner's own Ollama settings agent has nothing left to configure
+			say("Ollama removed")
+		}
+		emit(bench.Event{Level: "info", Message: "Done", Progress: 1})
+		return nil
+	}, func(error) { _ = s.refreshHW(context.Background()) })
+	if err != nil {
+		writeErr(w, http.StatusConflict, "busy", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]string{"status": "started"})
 }
 
 // ---- bootstrap: install or update everything aituner needs, in one confirmed job -------------------------------------

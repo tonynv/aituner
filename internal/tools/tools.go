@@ -40,6 +40,19 @@ func dirBytes(dir string) int64 {
 	return n
 }
 
+// BrewPrefixes are Homebrew's install prefixes (Apple Silicon, then Intel). Homebrew records a formula as
+// <prefix>/Cellar/<name> and a cask as <prefix>/Caskroom/<name>: checking those is instant, unlike `brew list`.
+var BrewPrefixes = []string{"/opt/homebrew", "/usr/local"}
+
+func brewHas(kind, name string) bool {
+	for _, p := range BrewPrefixes {
+		if fi, err := os.Stat(filepath.Join(p, kind, name)); err == nil && fi.IsDir() {
+			return true
+		}
+	}
+	return false
+}
+
 // FindOllama inspects the Ollama install. home is the user's home folder.
 func FindOllama(ctx context.Context, r connect.Runner, home, cliLink string) Ollama {
 	o := Ollama{Models: filepath.Join(home, ".ollama")}
@@ -49,16 +62,14 @@ func FindOllama(ctx context.Context, r connect.Runner, home, cliLink string) Oll
 	if t, err := os.Readlink(cliLink); err == nil && strings.HasPrefix(t, OllamaApp+"/") {
 		o.CLILink = true
 	}
-	if brew, ok := r.Look("brew"); ok {
-		if r.Run(ctx, func(string) {}, "", nil, brew, "list", "--cask", "ollama") == nil {
-			o.Kind, o.Path = "brew-cask", OllamaApp
-			return o
-		}
-		if r.Run(ctx, func(string) {}, "", nil, brew, "list", "--formula", "ollama") == nil {
-			o.Kind = "brew-formula"
-			o.Path, _ = r.Look("ollama")
-			return o
-		}
+	switch {
+	case brewHas("Caskroom", "ollama"):
+		o.Kind, o.Path = "brew-cask", OllamaApp
+		return o
+	case brewHas("Cellar", "ollama"):
+		o.Kind = "brew-formula"
+		o.Path, _ = r.Look("ollama")
+		return o
 	}
 	if fi, err := os.Stat(OllamaApp); err == nil && fi.IsDir() {
 		o.Kind, o.Path = "app", OllamaApp
@@ -145,10 +156,7 @@ func RemoveOllama(ctx context.Context, r connect.Runner, o Ollama, models bool, 
 }
 
 // MacmonFromBrew reports whether macmon was installed with Homebrew (the only way aituner installs it).
-func MacmonFromBrew(ctx context.Context, r connect.Runner) bool {
-	brew, ok := r.Look("brew")
-	return ok && r.Run(ctx, func(string) {}, "", nil, brew, "list", "--formula", "macmon") == nil
-}
+func MacmonFromBrew() bool { return brewHas("Cellar", "macmon") }
 
 // RemoveMacmon uninstalls macmon with Homebrew.
 func RemoveMacmon(ctx context.Context, r connect.Runner, emit connect.Emit) error {

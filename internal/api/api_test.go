@@ -658,6 +658,35 @@ func TestUpdateInstallRefusedOutsideTheApp(t *testing.T) {
 	}
 }
 
+// Details and guards only: this must never actually quit or remove the real Ollama on the machine running the tests.
+func TestServiceDetailsAndGuards(t *testing.T) {
+	e := newEnv(t)
+	d := e.json(t, "GET", "/api/v1/services/ollama", "", 200)
+	if !strings.Contains(fmt.Sprint(d["info"]), "never installs Ollama") {
+		t.Fatalf("%v", d)
+	}
+	if r, _ := e.do(t, "GET", "/api/v1/services/nope", "", e.authed(nil)); r.StatusCode != 404 {
+		t.Fatalf("unknown service: %d", r.StatusCode)
+	}
+	// no model is served: stopping it is not offered, so it is refused
+	if r, _ := e.do(t, "POST", "/api/v1/services/model/stop", `{"confirm":true}`, e.authed(nil)); r.StatusCode != 409 {
+		t.Fatalf("an action that is not offered must be refused: %d", r.StatusCode)
+	}
+	// the temp data dir has no MLX: removing it is not offered either
+	if r, _ := e.do(t, "POST", "/api/v1/services/mlx/remove", `{"confirm":true}`, e.authed(nil)); r.StatusCode != 409 {
+		t.Fatalf("%d", r.StatusCode)
+	}
+	for _, a := range d["actions"].([]any) { // whatever is offered for Ollama still needs confirmation
+		id := a.(map[string]any)["id"].(string)
+		if r, _ := e.do(t, "POST", "/api/v1/services/ollama/"+id, `{}`, e.authed(nil)); r.StatusCode != 400 {
+			t.Fatalf("ollama %s without confirmation: %d", id, r.StatusCode)
+		}
+	}
+	if r, _ := e.do(t, "POST", "/api/v1/services/ollama/remove", `{"confirm":true}`, map[string]string{"Cookie": CookieName + "=" + token}); r.StatusCode != 403 {
+		t.Fatalf("no Origin on a mutation: %d", r.StatusCode)
+	}
+}
+
 func TestPhaseGates(t *testing.T) {
 	e := newEnv(t)
 	for _, c := range []struct{ m, p string }{{"GET", "/api/v1/tune/plan"}, {"POST", "/api/v1/tune/apply"}} {

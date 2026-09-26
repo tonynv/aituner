@@ -275,6 +275,8 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("GET /api/v1/health", s.handleHealth)
 	api.HandleFunc("GET /api/v1/monitor", s.handleMonitor)
 	api.HandleFunc("GET /api/v1/services", s.handleServices)
+	api.HandleFunc("GET /api/v1/services/{id}", s.handleServiceDetail)
+	api.HandleFunc("POST /api/v1/services/{id}/{action}", s.handleServiceAction)
 	api.HandleFunc("GET /api/v1/update", s.handleUpdateStatus)
 	api.HandleFunc("POST /api/v1/update/check", s.handleUpdateCheck)
 	api.HandleFunc("PUT /api/v1/update/settings", s.handleUpdateSettings)

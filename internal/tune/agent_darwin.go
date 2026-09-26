@@ -137,3 +137,11 @@ func (a AgentSpec) Remove(ctx context.Context) error {
 	}
 	return nil
 }
+
+// RemoveOllamaAgent removes aituner's Ollama settings LaunchAgent, if it is installed (for when Ollama is removed).
+func RemoveOllamaAgent(ctx context.Context) error {
+	if a := DefaultAgent(); a.Installed() {
+		return a.Remove(ctx)
+	}
+	return nil
+}

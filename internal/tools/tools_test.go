@@ -16,7 +16,6 @@ type fake struct {
 	have    map[string]string
 	cmds    []string
 	running bool
-	brewHas map[string]bool // "cask ollama", "formula ollama", "formula macmon"
 }
 
 func (f *fake) Look(name string) (string, bool) { p, ok := f.have[name]; return p, ok }
@@ -29,11 +28,6 @@ func (f *fake) Run(_ context.Context, _ connect.Emit, _ string, _ []string, name
 			return nil
 		}
 		return errors.New("no process")
-	case filepath.Base(name) == "brew" && len(args) == 3 && args[0] == "list":
-		if f.brewHas[strings.TrimPrefix(args[1], "--")+" "+args[2]] {
-			return nil
-		}
-		return errors.New("not installed")
 	}
 	return nil
 }
@@ -42,12 +36,21 @@ func TestFindOllamaKinds(t *testing.T) {
 	home := t.TempDir()
 	os.MkdirAll(filepath.Join(home, ".ollama", "models"), 0o755)
 	os.WriteFile(filepath.Join(home, ".ollama", "models", "blob"), make([]byte, 2000), 0o644)
-	f := &fake{have: map[string]string{"brew": "/opt/homebrew/bin/brew", "ollama": "/opt/homebrew/bin/ollama"}, brewHas: map[string]bool{"formula ollama": true}}
+	prefix := t.TempDir()
+	old := BrewPrefixes
+	BrewPrefixes = []string{prefix}
+	t.Cleanup(func() { BrewPrefixes = old })
+	os.MkdirAll(filepath.Join(prefix, "Cellar", "ollama"), 0o755)
+	f := &fake{have: map[string]string{"brew": "/opt/homebrew/bin/brew", "ollama": "/opt/homebrew/bin/ollama"}}
 	o := FindOllama(context.Background(), f, home, filepath.Join(home, "no-link"))
 	if o.Kind != "brew-formula" || o.Path != "/opt/homebrew/bin/ollama" || o.ModelsGB <= 0 || o.CLILink {
 		t.Fatalf("%+v", o)
 	}
-	f.brewHas = map[string]bool{"cask ollama": true}
+	os.RemoveAll(filepath.Join(prefix, "Cellar", "ollama"))
+	os.MkdirAll(filepath.Join(prefix, "Caskroom", "ollama"), 0o755)
+	if MacmonFromBrew() {
+		t.Fatal("macmon is not in this prefix")
+	}
 	if o := FindOllama(context.Background(), f, home, ""); o.Kind != "brew-cask" {
 		t.Fatalf("%+v", o)
 	}
