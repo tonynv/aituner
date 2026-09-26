@@ -189,6 +189,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
     private let panelWidth: CGFloat = 340
 
     func applicationDidFinishLaunching(_ note: Notification) {
+        NSApp.appearance = NSAppearance(named: .darkAqua) // dark by default; the page reports a light choice
         buildMenu()
         buildStatusItem()
         guard let exe = Bundle.main.url(forAuxiliaryExecutable: "aituner-server") else {
@@ -303,7 +304,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
 
     private func showWindow(loading url: URL? = nil) {
         if window == nil {
-            let wv = makeWebView(policy: policy)
+            let wv = makeWebView(policy: policy, handler: self)
             let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1120, height: 820),
                              styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
             w.title = "aituner"
@@ -374,7 +375,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         panelView.load(URLRequest(url: URL(string: "about:blank")!))
     }
 
-    // Messages from the panel page: "open", "quit", or {height: n}. Only the server's own page may send them.
+    // Messages from the pages: "open", "quit", {height: n} (panel) or {theme: "dark"|"light"} (window).
+    // Only the server's own page may send them.
     func userContentController(_ ucc: WKUserContentController, didReceive message: WKScriptMessage) {
         guard message.frameInfo.isMainFrame, policy.isServer(message.frameInfo.request.url) else { return }
         if let cmd = message.body as? String {
@@ -385,6 +387,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
             }
         } else if let d = message.body as? [String: Any], let h = d["height"] as? Double {
             popover.contentSize = NSSize(width: panelWidth, height: min(max(h, 120), 640))
+        } else if let d = message.body as? [String: Any], let theme = d["theme"] as? String {
+            let name: NSAppearance.Name = theme == "light" ? .aqua : .darkAqua
+            guard NSApp.appearance?.name != name else { return }
+            NSApp.appearance = NSAppearance(named: name)
+            panelView?.reload() // the panel reads the shared choice when it loads
         }
     }
 

@@ -104,8 +104,7 @@ function layout(p) {
 <link rel="canonical" href="${canonical}">
 ${p.path === '/404' ? '<meta name="robots" content="noindex">' : '<meta name="robots" content="index, follow">'}
 <meta name="color-scheme" content="dark light">
-<meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)">
-<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0a0a0a">
 <meta property="og:type" content="${p.path === '/' ? 'website' : 'article'}">
 <meta property="og:site_name" content="aituner">
 <meta property="og:title" content="${esc(title)}">

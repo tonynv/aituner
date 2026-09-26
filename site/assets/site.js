@@ -2,7 +2,7 @@
 (() => {
   const root = document.documentElement;
   document.getElementById('theme')?.addEventListener('click', () => {
-    const dark = root.dataset.theme ? root.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+    const dark = root.dataset.theme !== 'light'; // dark unless light was chosen
     root.dataset.theme = dark ? 'light' : 'dark';
     try { localStorage.setItem('aituner-site-theme', root.dataset.theme); } catch { /* storage blocked */ }
   });

@@ -29,33 +29,29 @@
     { tab: 'tune', tile: 'purple', label: 'Tune', icon: 'sliders' },
     { tab: 'rerun', tile: 'teal', label: 'Re-run', icon: 'refresh' },
   ];
-  let theme = $state('system');
+  let theme = $state('dark');
   let newRunDialog;
   async function confirmNewRun() {
     newRunDialog?.close();
     await act(() => api.newRun());
     app.tab = 'hardware';
   }
-  let systemDark = $state(true);
   let scanning = $state(true);
   function detected(state) { app.state = state; app.detected = true; }
   function scanDone() { scanning = false; app.detected = true; }
 
   onMount(() => {
     try { const t = localStorage.getItem('aituner-theme'); if (t === 'dark' || t === 'light') theme = t; } catch { /* storage blocked */ }
-    const mq = matchMedia('(prefers-color-scheme: dark)');
-    systemDark = mq.matches;
-    const onChange = (e) => (systemDark = e.matches);
-    mq.addEventListener('change', onChange);
     const stop = start();
     // every page load runs detection again (shown by the start-up scan), then shows the machine
-    return () => { mq.removeEventListener('change', onChange); stop(); };
+    return stop;
   });
   $effect(() => {
-    const root = document.documentElement;
-    if (theme === 'system') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', theme);
+    document.documentElement.setAttribute('data-theme', theme);
+    // the macOS app matches its title bar and menu bar panel to the chosen theme
+    window.webkit?.messageHandlers?.aituner?.postMessage({ theme });
   });
-  const dark = $derived(theme === 'system' ? systemDark : theme === 'dark');
+  const dark = $derived(theme === 'dark');
   function toggleTheme() {
     theme = dark ? 'light' : 'dark';
     try { localStorage.setItem('aituner-theme', theme); } catch { /* storage blocked */ }
