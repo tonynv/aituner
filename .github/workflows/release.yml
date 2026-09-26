@@ -104,7 +104,8 @@ jobs:
         run: |
           version="${GITHUB_REF_NAME#v}"
           sha=$(awk '/\.zip$/ { print $1 }' dist/SHA256SUMS)
-          git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/tonynv/homebrew-tap.git" "$RUNNER_TEMP/tap"
+          gh auth setup-git # the token reaches git through gh's credential helper, never inside a URL
+          gh repo clone tonynv/homebrew-tap "$RUNNER_TEMP/tap" -- --depth 1
           cd "$RUNNER_TEMP/tap"
           sed -i '' -e "s/^  version \".*\"/  version \"${version}\"/" -e "s/^  sha256 \".*\"/  sha256 \"${sha}\"/" Casks/aituner.rb
           git -c user.name="aituner release" -c user.email="release@users.noreply.github.com" commit -am "aituner ${version}"
