@@ -532,3 +532,35 @@ Findings along the way: `--tools` does not add tools back under `--bare`; the su
 - **Docs site:** `docs/` (static HTML/CSS with the app's tokens, dark/light, responsive), deployed to
   https://tonynv.github.io/aituner/ by `.github/workflows/pages.yml` when a release is published, so the page always
   describes a real signed release.
+
+### 16.13 Software update (owner request: "prompt and upgrade when a new version is on GitHub")
+
+- `internal/update`: latest release from `api.github.com/repos/tonynv/aituner/releases/latest` (404 = no release yet, not
+  an error); only `vX.Y.Z`, non-draft, non-prerelease releases with `aituner-X.Y.Z.zip` and `SHA256SUMS`. The zip must
+  match both GitHub's asset `digest` and SHA256SUMS; the unpacked app must pass `codesign --verify --deep --strict`, be
+  signed by team KZWKV6U343, be accepted by `spctl` (notarized) and be `ai.aituner.app` at exactly the advertised version.
+  Outbound hosts added to the allow-list: api.github.com, github.com, release-assets.githubusercontent.com.
+- Install: a helper (bash, paths shell-quoted) waits for the app to quit, moves the old bundle aside, copies the new one
+  in, restores the old one if that fails, and relaunches. Homebrew installs are upgraded with `brew upgrade --cask
+  aituner` in Terminal instead; terminal and development builds never replace themselves (they link to the release).
+- Release builds check 30 s after launch and daily (setting "Check for updates automatically", default on); a version
+  can be skipped. The app shell prompts natively (Update Now / Later / Skip This Version) and has "Check for Updates…";
+  the web UI shows a banner and an About page. Line protocol additions: app→aituner `check`, `update`, `skip <v>`;
+  aituner→app `update <v>`, `uptodate <v>`, `update-error <msg>`, `quit`.
+- Verified: unit tests (versions, release parsing, 404, double checksum, swap and rollback), live signature checks
+  against a real notarized app (accepts it; rejects wrong team, wrong version, other bundle, tampered bundle), the line
+  protocol against the real GitHub API. Not yet exercised: a real release-to-release upgrade (needs two signed releases).
+
+### 16.14 Tools and services sheet (owner request: "click on active apps like Ollama and remove it")
+
+- `GET /api/v1/services/{id}` lists details and the actions available now; `POST /api/v1/services/{id}/{action}` runs a
+  confirmed action after re-deriving that it is still offered: stop the model, remove the MLX environment (to the
+  Trash; Bootstrap reinstalls), uninstall macmon (brew), quit or uninstall Ollama (Ollama.app to the Trash, or brew;
+  optionally its models; its root-owned CLI link only through the admin prompt and only if it points into Ollama.app;
+  aituner's Ollama LaunchAgent removed with it). Homebrew installs are detected from Cellar/Caskroom folders.
+- Ollama: aituner never installs it; on Apple Silicon models run with MLX. Ollama stays an optional comparison.
+
+### 16.15 App icon
+
+One SVG (`web/public/icon.svg`: indigo-violet-cyan gradient, glowing chip with a live pulse) renders the macOS iconset,
+the PWA/iPhone icons (`make_icon --png`) and the docs icons. The menu bar icon stays a monochrome template symbol.

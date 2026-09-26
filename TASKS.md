@@ -82,7 +82,7 @@ Legend: [x] done, [~] partial, [ ] not done. Build order: DataStore -> API -> UI
 - [x] Official icons for the editor integrations (installed apps; Neovim/Vim/tmux logos with licences)
 - [x] Phones feel like iOS (nav bar, tab bar, More sheet, bottom-sheet dialogs)
 - [x] Distribution: release workflow (sign, notarize, publish), Homebrew tap, docs site on Pages
-- [ ] Redesign Downloads (explain the speed table, including the Claude Code turn columns)
+- [x] Redesign Downloads: Discover / Queue / On this Mac (branch feat/downloads-redesign; model cards unverified with real models: the models share is empty)
 - [ ] Skills folder (with the Skills feature)
 - [x] Release gates for v0.1.0 (2026-09-25): manager PASS (SPEC version fix applied), UI/UX PASS after fixes (--accent-text),
       security PASS (tap token hardening applied), QA PASS 22/22 end to end on a sandbox (download, bootstrap, start model,
@@ -94,3 +94,10 @@ Legend: [x] done, [~] partial, [ ] not done. Build order: DataStore -> API -> UI
 - Knowledge base folder (local) for RAG over the running model
 - Local Skills repo, loadable into any running model
 - Pinned auto-start models/agents: start at login, reserve their memory, shown in machine capabilities, and counted by the recommender
+
+## P16 Update, services, icon (branch feat/auto-update)
+- [x] Software update: GitHub release check, verified download (checksums, Developer ID, notarization, bundle, version), swap with rollback, native prompt, About page, banner
+- [x] Tools and services sheet: details and confirmed actions (stop model, remove MLX, uninstall macmon, quit/uninstall Ollama)
+- [x] aituner brand goes home; new vibrant app icon from one SVG
+- [ ] Re-run the release gates on the merged work before tagging v0.1.0
+- [ ] Docs site on Cloudflare Pages with the owner's domain (aituner.app recommended): waiting for CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID and the domain
