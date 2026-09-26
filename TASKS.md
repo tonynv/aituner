@@ -30,7 +30,7 @@ Legend: [x] done, [~] partial, [ ] not done. Build order: DataStore -> API -> UI
 - [ ] P11 Review gates (code, security, UI/UX, QA) on the new surfaces; docs
 
 ## Needs the owner
-- D1: SQLite has no RLS (app-level tenant scoping + isolation test). Accept, or switch to local PostgreSQL?
+- D1: SQLite has no RLS (app-level tenant scoping + isolation test). Accept, or switch to local PostgreSQL? (the manager gate asks for an explicit sign-off before the tag)
 - Approve the macOS admin dialog once to exercise the wired-limit apply (the only path not run end to end)
 - Cut v0.1.0 (annotated tag, no attribution) and merge build/v0.1 into main when satisfied
 - Provide the release secrets (Developer ID .p12 + password, App Store Connect API key .p8 + key ID + issuer ID, tap token) via secret_mgr
@@ -84,7 +84,10 @@ Legend: [x] done, [~] partial, [ ] not done. Build order: DataStore -> API -> UI
 - [x] Distribution: release workflow (sign, notarize, publish), Homebrew tap, docs site on Pages
 - [ ] Redesign Downloads (explain the speed table, including the Claude Code turn columns)
 - [ ] Skills folder (with the Skills feature)
-- [ ] Cut v0.1.0 after the release gates
+- [x] Release gates for v0.1.0 (2026-09-25): manager PASS (SPEC version fix applied), UI/UX PASS after fixes (--accent-text),
+      security PASS (tap token hardening applied), QA PASS 22/22 end to end on a sandbox (download, bootstrap, start model,
+      Monitor, menu bar view, gateway completion, storage, both themes, phone, docs site); CI tests pass on macos-26
+- [ ] Cut v0.1.0: waiting for the release secrets (see "Needs the owner"); then tag, and the workflow signs, notarizes and publishes
 
 ## Requested next (owner, 2026-09-25), not started
 - Chat with the running model from the Monitor screen (Claude-web-like)
