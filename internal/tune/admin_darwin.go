@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -43,4 +44,20 @@ func checkScript(s string) error {
 		return errors.New("refusing privileged script with disallowed characters")
 	}
 	return nil
+}
+
+// OllamaCLILink is the command-line link Ollama.app installs (owned by root).
+const OllamaCLILink = "/usr/local/bin/ollama"
+
+// RemoveOllamaCLILink removes Ollama.app's root-owned command-line link, with the native admin prompt, and only when
+// it is a symlink into /Applications/Ollama.app (never a real binary or a link into anything else).
+func RemoveOllamaCLILink(ctx context.Context) error {
+	target, err := os.Readlink(OllamaCLILink)
+	if err != nil {
+		return nil // not a link (or not there): nothing of Ollama.app's to remove
+	}
+	if !strings.HasPrefix(target, "/Applications/Ollama.app/") {
+		return fmt.Errorf("%s points to %s, not into Ollama.app: left in place", OllamaCLILink, target)
+	}
+	return runAdmin(ctx, "/bin/rm -f "+OllamaCLILink)
 }
