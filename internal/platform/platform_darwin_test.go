@@ -121,3 +121,19 @@ func TestDeviceIconFromCoreTypes(t *testing.T) {
 		t.Fatalf("no picture for this Mac (%s)", h.Model.Identifier)
 	}
 }
+
+// A virtual Mac (GitHub's macos-26 runner) reports number_processors as a number; detection must not fail on it.
+func TestApplySystemProfilerNumericFields(t *testing.T) {
+	raw := []byte(`{"SPHardwareDataType":[{"machine_name":"Apple Virtual Machine 1","machine_model":"VirtualMac2,1","chip_type":"Apple M1 (Virtual)","number_processors":3,"physical_memory":"7 GB"}],
+		"SPDisplaysDataType":[{"_name":"Apple Paravirtual device","sppci_cores":8,"sppci_device_type":"spdisplays_gpu"}],"SPMemoryDataType":[]}`)
+	var h Hardware
+	if err := applySystemProfiler(&h, raw); err != nil {
+		t.Fatal(err)
+	}
+	if h.CPU.Cores != 3 || h.GPU.Cores != 8 || h.Model.Identifier != "VirtualMac2,1" {
+		t.Fatalf("%+v %+v", h.CPU, h.GPU)
+	}
+	if err := applySystemProfiler(&h, []byte(`{"SPHardwareDataType":[{"number_processors":true}]}`)); err != nil {
+		t.Fatalf("an unexpected type must not fail detection: %v", err)
+	}
+}

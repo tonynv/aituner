@@ -116,12 +116,12 @@ type spDoc struct {
 		MachineModel string `json:"machine_model"`
 		ModelNumber  string `json:"model_number"`
 		ChipType     string `json:"chip_type"`
-		NumProc      string `json:"number_processors"`
-		Memory       string `json:"physical_memory"`
+		NumProc      flexString `json:"number_processors"`
+		Memory       flexString `json:"physical_memory"`
 	} `json:"SPHardwareDataType"`
 	Displays []struct {
 		Name    string `json:"_name"`
-		Cores   string `json:"sppci_cores"`
+		Cores   flexString `json:"sppci_cores"`
 		Metal   string `json:"spdisplays_mtlgpufamilysupport"`
 		Vendor  string `json:"spdisplays_vendor"`
 		Type    string `json:"sppci_device_type"`
@@ -133,6 +133,24 @@ type spDoc struct {
 	Memory []struct {
 		Type string `json:"dimm_type"`
 	} `json:"SPMemoryDataType"`
+}
+
+// flexString accepts a JSON string or number. system_profiler's types differ between machines: number_processors is
+// "proc 10:8:2:0" on an M1 Max but a bare number on a virtual Mac (seen on GitHub's macos-26 runner). Other JSON types
+// leave it empty rather than failing the whole detection.
+type flexString string
+
+func (f *flexString) UnmarshalJSON(b []byte) error {
+	var s string
+	if json.Unmarshal(b, &s) == nil {
+		*f = flexString(s)
+		return nil
+	}
+	var n json.Number
+	if json.Unmarshal(b, &n) == nil {
+		*f = flexString(n.String())
+	}
+	return nil
 }
 
 var procRe = regexp.MustCompile(`proc (\d+):(\d+):(\d+)`)
@@ -149,15 +167,17 @@ func applySystemProfiler(h *Hardware, raw []byte) error {
 	hw := d.Hardware[0]
 	h.Model = Model{Name: hw.MachineName, Identifier: hw.MachineModel, Number: hw.ModelNumber}
 	h.CPU.Chip = hw.ChipType
-	if m := procRe.FindStringSubmatch(hw.NumProc); m != nil {
+	if m := procRe.FindStringSubmatch(string(hw.NumProc)); m != nil {
 		h.CPU.Cores, _ = strconv.Atoi(m[1])
 		h.CPU.PerformanceCores, _ = strconv.Atoi(m[2])
 		h.CPU.EfficiencyCores, _ = strconv.Atoi(m[3])
+	} else if n, err := strconv.Atoi(string(hw.NumProc)); err == nil {
+		h.CPU.Cores = n // a bare count: the performance/efficiency split comes from sysctl hw.perflevel*
 	}
 	for _, g := range d.Displays {
 		if g.Type == "spdisplays_gpu" || g.Cores != "" {
 			h.GPU.Name = g.Name
-			h.GPU.Cores, _ = strconv.Atoi(g.Cores)
+			h.GPU.Cores, _ = strconv.Atoi(string(g.Cores))
 			h.GPU.MetalSupport = strings.TrimPrefix(g.Metal, "spdisplays_")
 			h.GPU.Vendor = strings.TrimPrefix(g.Vendor, "sppci_vendor_")
 		}

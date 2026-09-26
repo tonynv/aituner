@@ -44,7 +44,7 @@ Every result is tied to a `run` (one pass through the flow) so history is kept a
   (`modernc.org/sqlite`, no CGO). Python only as a subprocess for MLX workloads (§6).
 - **Frontend:** Svelte 5 + Vite SPA, static build embedded in the Go binary with `go:embed`. PWA (manifest +
   service worker), responsive, dark and light first-class, thin-line icons, 2–4px radii, no emoji.
-- **Binary:** `aituner` is a **Bubble Tea v2 TUI** (`charm.land/bubbletea/v2` v2.0.9, latest stable **[VERIFIED]**; status, URL, live log, quit) that hosts the server and opens the
+- **Binary:** `aituner` is a **Bubble Tea v2 TUI** (`charm.land/bubbletea/v2` v2.0.10, latest stable **[VERIFIED 2026-09-25]**; status, URL, live log, quit) that hosts the server and opens the
   browser. `--no-tui` for headless. Launcher **`run_aituner.sh`** is the preflight (§9).
 - **No Docker, no Kubernetes, no third-party SaaS.** The only external services are the two public, read-only,
   unauthenticated sources the user asked for / that the models live on: canirun.ai and huggingface.co.
