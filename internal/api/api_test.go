@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -20,11 +21,13 @@ import (
 	"github.com/tonynv/aituner/internal/canirun"
 	"github.com/tonynv/aituner/internal/download"
 	"github.com/tonynv/aituner/internal/hf"
+	"github.com/tonynv/aituner/internal/httpx"
 	"github.com/tonynv/aituner/internal/platform"
 	"github.com/tonynv/aituner/internal/reco"
 	"github.com/tonynv/aituner/internal/serve"
 	"github.com/tonynv/aituner/internal/store"
 	"github.com/tonynv/aituner/internal/tune"
+	"github.com/tonynv/aituner/internal/update"
 )
 
 const token = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -91,7 +94,7 @@ func (e *env) authed(extra map[string]string) map[string]string {
 
 func TestUnauthenticatedRefused(t *testing.T) {
 	e := newEnv(t)
-	for _, p := range []string{"/api/v1/state", "/api/v1/health", "/api/v1/monitor", "/api/v1/services", "/api/v1/bootstrap", "/api/v1/storage", "/api/v1/reset", "/api/v1/recommendations", "/api/v1/tune/plan", "/api/v1/events"} {
+	for _, p := range []string{"/api/v1/state", "/api/v1/health", "/api/v1/monitor", "/api/v1/services", "/api/v1/bootstrap", "/api/v1/update", "/api/v1/storage", "/api/v1/reset", "/api/v1/recommendations", "/api/v1/tune/plan", "/api/v1/events"} {
 		if r, _ := e.do(t, "GET", p, "", nil); r.StatusCode != 401 {
 			t.Errorf("%s: %d", p, r.StatusCode)
 		}
@@ -569,6 +572,89 @@ func TestAppIconsComeFromInstalledApps(t *testing.T) {
 		if r, _ := e.do(t, "GET", "/api/v1/appicon/"+bad, "", e.authed(nil)); r.StatusCode == 200 {
 			t.Errorf("%s served an icon", bad)
 		}
+	}
+}
+
+// githubStandIn serves a latest-release answer shaped like GitHub's (or 404 when tag is empty) and points the updater
+// at it.
+func githubStandIn(t *testing.T, e *env, tag *string) {
+	t.Helper()
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if *tag == "" {
+			http.NotFound(w, r)
+			return
+		}
+		v := strings.TrimPrefix(*tag, "v")
+		fmt.Fprintf(w, `{"tag_name":%q,"draft":false,"prerelease":false,"body":"notes","html_url":"https://github.com/tonynv/aituner/releases/tag/%s","assets":[{"name":"aituner-%s.zip","browser_download_url":"https://github.com/x/aituner-%s.zip","size":1},{"name":"SHA256SUMS","browser_download_url":"https://github.com/x/SHA256SUMS","size":1}]}`, *tag, *tag, v, v)
+	}))
+	t.Cleanup(ts.Close)
+	host, _, _ := net.SplitHostPort(strings.TrimPrefix(ts.URL, "https://"))
+	c := httpx.New(host)
+	c.HTTP.Transport = ts.Client().Transport
+	e.s.upd.client = c
+	old := update.APIBase
+	update.APIBase = ts.URL
+	t.Cleanup(func() { update.APIBase = old })
+}
+
+func TestUpdateCheckAnnounceSkipAndManual(t *testing.T) {
+	e := newEnv(t)
+	var mu sync.Mutex
+	var lines []string
+	e.s.cfg.Notify = func(l string) { mu.Lock(); lines = append(lines, l); mu.Unlock() }
+	e.s.cfg.Version = "v0.1.0"
+	tag := "v0.2.0"
+	githubStandIn(t, e, &tag)
+	got := func() []string { mu.Lock(); defer mu.Unlock(); return append([]string(nil), lines...) }
+
+	st := e.json(t, "POST", "/api/v1/update/check", "{}", 200)
+	if st["available"] != true || st["current"] != "0.1.0" || st["latest"].(map[string]any)["version"] != "0.2.0" || st["method"] != "manual" {
+		t.Fatalf("%v", st)
+	}
+	e.json(t, "POST", "/api/v1/update/check", "{}", 200) // a second automatic check does not announce again
+	if l := got(); len(l) != 1 || l[0] != "update 0.2.0" {
+		t.Fatalf("announcements %v", l)
+	}
+	e.json(t, "PUT", "/api/v1/update/settings", `{"skip":"0.2.0","auto":false}`, 200)
+	tag = "v0.2.0"
+	e.s.upd.announced = ""
+	e.s.CheckForUpdate(context.Background(), false) // skipped: not announced
+	if l := got(); len(l) != 1 {
+		t.Fatalf("a skipped version was announced: %v", l)
+	}
+	e.s.CheckForUpdate(context.Background(), true) // a manual check always answers
+	if l := got(); len(l) != 2 || l[1] != "update 0.2.0" {
+		t.Fatalf("%v", l)
+	}
+	if st := e.json(t, "GET", "/api/v1/update", "", 200); st["auto"] != false || st["skipped"] != "0.2.0" {
+		t.Fatalf("%v", st)
+	}
+	tag = "" // no release on GitHub
+	e.s.CheckForUpdate(context.Background(), true)
+	if l := got(); l[len(l)-1] != "uptodate 0.1.0" {
+		t.Fatalf("%v", l)
+	}
+	if r, _ := e.do(t, "PUT", "/api/v1/update/settings", `{"skip":"../x"}`, e.authed(nil)); r.StatusCode != 400 {
+		t.Fatalf("bad skip version: %d", r.StatusCode)
+	}
+}
+
+func TestUpdateInstallRefusedOutsideTheApp(t *testing.T) {
+	e := newEnv(t)
+	e.s.cfg.Version = "v0.1.0"
+	tag := "v0.2.0"
+	githubStandIn(t, e, &tag)
+	e.s.CheckForUpdate(context.Background(), false)
+	if r, _ := e.do(t, "POST", "/api/v1/update/install", `{}`, e.authed(nil)); r.StatusCode != 400 {
+		t.Fatalf("install without confirmation: %d", r.StatusCode)
+	}
+	r, b := e.do(t, "POST", "/api/v1/update/install", `{"confirm":true}`, e.authed(nil))
+	if r.StatusCode != 409 || !strings.Contains(string(b), "terminal build") {
+		t.Fatalf("a terminal build must never replace itself: %d %s", r.StatusCode, b)
+	}
+	e.s.cfg.Version = "v0.1.0-4-gabcdef"
+	if st := e.json(t, "GET", "/api/v1/update", "", 200); st["available"] != false || st["release"] != false {
+		t.Fatalf("a development build is not offered updates: %v", st)
 	}
 }
 

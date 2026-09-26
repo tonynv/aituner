@@ -412,3 +412,26 @@ func ValidateProject(home, p string) (string, error) {
 	}
 	return real, nil
 }
+
+// RunInTerminal runs argv (each word shell-quoted, joined with &&-separated steps) in a new Terminal window, via a
+// .command file under ConfigDir/launch. Used for steps the user should watch, such as a Homebrew upgrade.
+func RunInTerminal(ctx context.Context, env Env, name string, steps ...[]string) error {
+	var lines []string
+	for _, argv := range steps {
+		q := make([]string, len(argv))
+		for i, a := range argv {
+			q[i] = shq(a)
+		}
+		lines = append(lines, strings.Join(q, " "))
+	}
+	script := "#!/bin/bash\n# " + Marker + ": " + name + "\n" + strings.Join(lines, " && \\\n  ") + "\n"
+	path := filepath.Join(env.ConfigDir, "launch", name+".command")
+	if err := WriteAtomic(path, []byte(script), 0o700); err != nil {
+		return err
+	}
+	open, _ := env.Run.Look("open")
+	if open == "" {
+		open = "/usr/bin/open"
+	}
+	return env.Run.Run(ctx, func(string) {}, "", nil, open, "-a", "Terminal", path)
+}

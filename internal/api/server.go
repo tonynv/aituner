@@ -27,12 +27,14 @@ import (
 	"github.com/tonynv/aituner/internal/download"
 	"github.com/tonynv/aituner/internal/gateway"
 	"github.com/tonynv/aituner/internal/hf"
+	"github.com/tonynv/aituner/internal/httpx"
 	"github.com/tonynv/aituner/internal/monitor"
 	"github.com/tonynv/aituner/internal/platform"
 	"github.com/tonynv/aituner/internal/reco"
 	"github.com/tonynv/aituner/internal/serve"
 	"github.com/tonynv/aituner/internal/store"
 	"github.com/tonynv/aituner/internal/tune"
+	"github.com/tonynv/aituner/internal/update"
 	"github.com/tonynv/aituner/internal/webui"
 )
 
@@ -53,8 +55,13 @@ type Config struct {
 	Runner   tune.Runner
 	Connect  connect.Runner          // runs installs for editor setup; nil = the real one
 	Open     func(path string) error // shows a folder in Finder; nil = /usr/bin/open
-	Version  string
-	Log      func(string)
+	// The macOS app shell, when aituner runs under it (--app); zero values otherwise.
+	Executable string            // this binary's path (decides whether aituner can update itself)
+	AppPID     int               // the app shell's process: the update helper waits for it to exit
+	Notify     func(line string) // a line for the app shell ("update 0.2.0", ...)
+	Quit       func()            // asks the app shell to quit (after an update is staged)
+	Version    string
+	Log        func(string)
 }
 
 type Server struct {
@@ -66,6 +73,7 @@ type Server struct {
 	dl      *download.Manager
 	serve   *serve.Manager
 	mon     *monitor.Monitor
+	upd     *updater
 	gwKey   string
 	gw      *http.Server // the gateway listener; non-nil while a model is served (guarded by mu)
 	gwPort  int
@@ -102,6 +110,10 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 		cfg.Open = func(p string) error { return exec.Command("/usr/bin/open", p).Run() }
 	}
 	s := &Server{cfg: cfg, ctx: ctx, tn: cfg.Store.ForTenant(id), jobs: newJobs(), hosts: map[string]bool{}, allowed: map[string]bool{}, dl: download.New(cfg.HF), serve: serve.New(), launch: map[string]time.Time{}, launchTTL: 15 * time.Minute}
+	s.upd = &updater{client: httpx.New(update.Hosts...)}
+	if _, release := update.Current(cfg.Version); release {
+		go s.updateLoop() // development builds and tests never check GitHub on their own
+	}
 	s.mon = monitor.New(s.ramTotal, func() bool { return s.serve.Status().State != serve.StateStopped })
 	s.serve.PIDFile = filepath.Join(cfg.DataDir, "serve.pid")
 	s.serve.LogFile = filepath.Join(cfg.DataDir, "model-server.log")
@@ -263,6 +275,10 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("GET /api/v1/health", s.handleHealth)
 	api.HandleFunc("GET /api/v1/monitor", s.handleMonitor)
 	api.HandleFunc("GET /api/v1/services", s.handleServices)
+	api.HandleFunc("GET /api/v1/update", s.handleUpdateStatus)
+	api.HandleFunc("POST /api/v1/update/check", s.handleUpdateCheck)
+	api.HandleFunc("PUT /api/v1/update/settings", s.handleUpdateSettings)
+	api.HandleFunc("POST /api/v1/update/install", s.handleUpdateInstall)
 	api.HandleFunc("GET /api/v1/machine/image", s.handleMachineImage)
 	api.HandleFunc("GET /api/v1/appicon/{id}", s.handleAppIcon)
 	api.HandleFunc("GET /api/v1/bootstrap", s.handleBootstrapPlan)

@@ -610,3 +610,19 @@ func TestTerminalMonitorsInstallAndOpen(t *testing.T) {
 		t.Fatalf("ran %q", got)
 	}
 }
+
+func TestRunInTerminalQuotesEveryWord(t *testing.T) {
+	home := t.TempDir()
+	r := &recorder{have: map[string]string{"open": "/usr/bin/open"}}
+	env := Env{Home: home, ConfigDir: filepath.Join(home, ".config", "aituner"), Run: r}
+	if err := RunInTerminal(context.Background(), env, "update", []string{"/opt/homebrew/bin/brew", "upgrade", "--cask", "aituner"}, []string{"/usr/bin/open", "-a", "aituner; rm -rf ~"}); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(filepath.Join(env.ConfigDir, "launch", "update.command"))
+	if !strings.Contains(string(b), `'/opt/homebrew/bin/brew' 'upgrade' '--cask' 'aituner' && \`) || !strings.Contains(string(b), `'aituner; rm -rf ~'`) {
+		t.Fatalf("%s", b)
+	}
+	if got := r.cmds[len(r.cmds)-1]; !strings.HasPrefix(got, "open -a Terminal ") {
+		t.Fatalf("ran %q", got)
+	}
+}
