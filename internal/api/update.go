@@ -140,6 +140,13 @@ func (s *Server) updateLoop() {
 	}
 }
 
+// NotifyApp sends a line to the app shell, when aituner runs under it.
+func (s *Server) NotifyApp(line string) {
+	if s.cfg.Notify != nil {
+		s.cfg.Notify(line)
+	}
+}
+
 // SkipUpdate records a version the user does not want to be offered again.
 func (s *Server) SkipUpdate(ctx context.Context, version string) error {
 	if version != "" {

@@ -19,6 +19,8 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -42,7 +44,7 @@ func main() {
 	noTUI := flag.Bool("no-tui", false, "headless: log to stdout instead of the terminal UI")
 	noOpen := flag.Bool("no-open", false, "do not open the browser")
 	showVersion := flag.Bool("version", false, "print version and exit")
-	appMode := flag.Bool("app", false, "run under the macOS app (implies -no-tui -no-open): prints \"link <url>\" on stdout now and for each line read on stdin; exits when stdin closes")
+	appMode := flag.Bool("app", false, "run under the macOS app (implies -no-tui -no-open): a line protocol on stdin/stdout (see serveAppControl); exits when stdin closes")
 	flag.Parse()
 	if *showVersion {
 		fmt.Println("aituner", version)
@@ -97,8 +99,16 @@ func run(port int, noTUI, noOpen, appMode bool) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	srv, err := api.New(ctx, api.Config{Store: db, Tenant: "local", Platform: plat, Token: token, DataDir: dataDir,
-		CanIRun: canirun.New(), HF: hf.New(), Ollama: bench.NewOllama(), Runner: tune.NewRunner(), Version: version, Log: func(s string) { log.Print(s) }})
+	cfg := api.Config{Store: db, Tenant: "local", Platform: plat, Token: token, DataDir: dataDir,
+		CanIRun: canirun.New(), HF: hf.New(), Ollama: bench.NewOllama(), Runner: tune.NewRunner(), Version: version, Log: func(s string) { log.Print(s) }}
+	out := &lineWriter{w: os.Stdout}
+	if appMode {
+		cfg.Executable, _ = os.Executable()
+		cfg.AppPID = os.Getppid() // the app shell started us
+		cfg.Notify = func(line string) { out.send(line) }
+		cfg.Quit = func() { out.send("quit") }
+	}
+	srv, err := api.New(ctx, cfg)
 	if err != nil {
 		return err
 	}
@@ -123,7 +133,7 @@ func run(port int, noTUI, noOpen, appMode bool) error {
 	}
 
 	if appMode {
-		go serveAppControl(os.Stdin, os.Stdout, link, stop)
+		go serveAppControl(os.Stdin, out, link, stop, func(cmd string) { appCommand(ctx, srv, cmd) })
 		<-ctx.Done()
 	} else if noTUI {
 		fmt.Printf("aituner running. Open (single-use link): %s\n", link())
@@ -138,19 +148,56 @@ func run(port int, noTUI, noOpen, appMode bool) error {
 	return httpSrv.Shutdown(shutdown)
 }
 
-// serveAppControl speaks the macOS app's line protocol: it writes "link <url>" (a fresh single-use launch link) now and
-// again for each line read from in, and stops aituner when in closes, so the server never outlives the app, even one
-// that was force-quit.
-func serveAppControl(in io.Reader, out io.Writer, link func() string, stop context.CancelFunc) {
+// lineWriter serialises lines to the app shell: link replies and notifications come from different goroutines.
+type lineWriter struct {
+	mu sync.Mutex
+	w  io.Writer
+}
+
+func (l *lineWriter) send(line string) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	_, err := fmt.Fprintln(l.w, line)
+	return err
+}
+
+// serveAppControl speaks the macOS app's line protocol and stops aituner when stdin closes, so the server never
+// outlives the app, even one that was force-quit.
+//
+//	app -> aituner: an empty line asks for a fresh single-use launch link; "check" checks for an update now;
+//	                "update" installs the available update; "skip <version>" stops offering that version.
+//	aituner -> app: "link <url>"; "update <version>" (a newer release, prompt the user); "uptodate <version>";
+//	                "update-error <message>"; "quit" (an update is staged: quit so it can be swapped in).
+func serveAppControl(in io.Reader, out *lineWriter, link func() string, stop context.CancelFunc, command func(string)) {
 	defer stop()
-	if _, err := fmt.Fprintln(out, "link", link()); err != nil {
+	if out.send("link "+link()) != nil {
 		return
 	}
 	sc := bufio.NewScanner(in)
 	for sc.Scan() {
-		if _, err := fmt.Fprintln(out, "link", link()); err != nil {
+		if line := strings.TrimSpace(sc.Text()); line != "" {
+			go command(line)
+			continue
+		}
+		if out.send("link "+link()) != nil {
 			return
 		}
+	}
+}
+
+// appCommand runs one command from the app shell.
+func appCommand(ctx context.Context, srv *api.Server, cmd string) {
+	switch verb, arg, _ := strings.Cut(cmd, " "); verb {
+	case "check":
+		srv.CheckForUpdate(ctx, true)
+	case "update":
+		if err := srv.InstallUpdate(ctx); err != nil {
+			srv.NotifyApp("update-error " + err.Error())
+		}
+	case "skip":
+		_ = srv.SkipUpdate(ctx, arg)
+	default:
+		log.Printf("app: unknown command %q", verb)
 	}
 }
 
