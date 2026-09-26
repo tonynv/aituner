@@ -529,9 +529,11 @@ Findings along the way: `--tools` does not add tools back under `--bare`; the su
   requires arm64 and macOS 14, quits the app before uninstalling, and its `zap` removes only what aituner creates (app
   data, WebKit storage, preferences, launchers, `~/.config/aituner`, its launchd jobs), never models, reports or the
   knowledge base.
-- **Docs site:** `docs/` (static HTML/CSS with the app's tokens, dark/light, responsive), deployed to
-  https://tonynv.github.io/aituner/ by `.github/workflows/pages.yml` when a release is published, so the page always
-  describes a real signed release.
+- **Docs site:** `docs/` (static HTML/CSS with the app's tokens, dark/light, responsive), deployed to Cloudflare Pages
+  (project "aituner"; owner request: Cloudflare, not GitHub Pages) by `.github/workflows/pages.yml` when a release is
+  published, so the page always describes a real signed release. Secrets: CLOUDFLARE_API_TOKEN (Account > Cloudflare
+  Pages > Edit only), CLOUDFLARE_ACCOUNT_ID. Custom domain: the owner's (aituner.app recommended), attached in the
+  dashboard.
 
 ### 16.13 Software update (owner request: "prompt and upgrade when a new version is on GitHub")
 
