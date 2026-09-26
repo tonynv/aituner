@@ -112,20 +112,20 @@ func (p darwinPlatform) Detect(ctx context.Context) (*Hardware, error) {
 
 type spDoc struct {
 	Hardware []struct {
-		MachineName  string `json:"machine_name"`
-		MachineModel string `json:"machine_model"`
-		ModelNumber  string `json:"model_number"`
-		ChipType     string `json:"chip_type"`
+		MachineName  string     `json:"machine_name"`
+		MachineModel string     `json:"machine_model"`
+		ModelNumber  string     `json:"model_number"`
+		ChipType     string     `json:"chip_type"`
 		NumProc      flexString `json:"number_processors"`
 		Memory       flexString `json:"physical_memory"`
 	} `json:"SPHardwareDataType"`
 	Displays []struct {
-		Name    string `json:"_name"`
+		Name    string     `json:"_name"`
 		Cores   flexString `json:"sppci_cores"`
-		Metal   string `json:"spdisplays_mtlgpufamilysupport"`
-		Vendor  string `json:"spdisplays_vendor"`
-		Type    string `json:"sppci_device_type"`
-		Model   string `json:"sppci_model"`
+		Metal   string     `json:"spdisplays_mtlgpufamilysupport"`
+		Vendor  string     `json:"spdisplays_vendor"`
+		Type    string     `json:"sppci_device_type"`
+		Model   string     `json:"sppci_model"`
 		Screens []struct {
 			Name string `json:"_name"`
 		} `json:"spdisplays_ndrvs"`

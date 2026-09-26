@@ -267,7 +267,8 @@ func TestMonitorStreamsLiveSamples(t *testing.T) {
 	if len(m.Samples) == 0 || m.Source == "" || m.Model.State != serve.StateStopped || len(m.Tools) != 3 {
 		t.Fatalf("%+v", m)
 	}
-	if s := m.Samples[0]; s.GPUPct < 0 || s.RAMTotal <= 0 {
+	virtual := strings.HasPrefix(e.s.hardware().Model.Identifier, "VirtualMac") // no GPU counters in a VM
+	if s := m.Samples[0]; s.RAMTotal <= 0 || (s.GPUPct < 0 && !virtual) {
 		t.Fatalf("not a real sample: %+v", s)
 	}
 	seq = m.Samples[len(m.Samples)-1].Seq
@@ -526,6 +527,13 @@ func TestServicesAndBootstrapPlan(t *testing.T) {
 
 func TestMachineImageIsThisMacsOwnPicture(t *testing.T) {
 	e := newEnv(t)
+	if _, ok := platform.DeviceIcon(context.Background(), e.s.hardware().Model.Identifier); !ok {
+		// e.g. a virtual Mac: macOS has no picture for it, so the UI draws a generic machine
+		if r, _ := e.do(t, "GET", "/api/v1/machine/image", "", e.authed(nil)); r.StatusCode != 404 {
+			t.Fatalf("no device picture must be a 404: %d", r.StatusCode)
+		}
+		return
+	}
 	r, b := e.do(t, "GET", "/api/v1/machine/image", "", e.authed(nil))
 	if r.StatusCode != 200 || r.Header.Get("Content-Type") != "image/png" || len(b) < 1000 || string(b[1:4]) != "PNG" {
 		t.Fatalf("%d %s %d bytes", r.StatusCode, r.Header.Get("Content-Type"), len(b))

@@ -50,13 +50,21 @@ func TestCapListedExactToken(t *testing.T) {
 	}
 }
 
+// virtualMac reports whether the tests run in a macOS virtual machine (such as GitHub's macos-26 runner). Its
+// paravirtual GPU exposes no core count, utilisation counter or device picture: aituner reports those as unknown.
+func virtualMac(t *testing.T) bool {
+	t.Helper()
+	id, _ := sysctl(context.Background(), "hw.model")
+	return strings.HasPrefix(id, "VirtualMac")
+}
+
 // Live check against the machine running the tests.
 func TestDetectLive(t *testing.T) {
 	h, err := Current().Detect(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if h.Arch == "arm64" && (!h.Memory.Unified || h.GPU.Cores == 0 || h.CPU.PerformanceCores == 0) {
+	if h.Arch == "arm64" && (!h.Memory.Unified || h.CPU.Cores == 0 || (!virtualMac(t) && (h.GPU.Cores == 0 || h.CPU.PerformanceCores == 0))) {
 		t.Fatalf("incomplete detection: %+v", h)
 	}
 	if h.Memory.TotalBytes < 4<<30 || h.Storage.TotalBytes == 0 || h.OS.Version == "" {
@@ -67,7 +75,7 @@ func TestDetectLive(t *testing.T) {
 // Live: this machine reports every health field, including GPU utilisation, without admin rights.
 func TestCheckHealthLive(t *testing.T) {
 	h := CheckHealth(context.Background())
-	if h.Cores <= 0 || h.FreeMemPct < 0 || h.GPUBusyPct < 0 || h.SpeedLimitPct <= 0 {
+	if h.Cores <= 0 || h.FreeMemPct < 0 || h.SpeedLimitPct <= 0 || (h.GPUBusyPct < 0 && !virtualMac(t)) {
 		t.Fatalf("%+v", h)
 	}
 }
@@ -117,7 +125,7 @@ func TestDeviceIconFromCoreTypes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := DeviceIcon(ctx, h.Model.Identifier); !ok {
+	if _, ok := DeviceIcon(ctx, h.Model.Identifier); !ok && !virtualMac(t) {
 		t.Fatalf("no picture for this Mac (%s)", h.Model.Identifier)
 	}
 }

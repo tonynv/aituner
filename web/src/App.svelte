@@ -287,14 +287,14 @@
     .mbrand { display: inline-flex; justify-content: center; color: var(--muted); }
     .mtitle { text-align: center; font-weight: 600; font-size: 17px; opacity: 0; transition: opacity 0.2s; }
     .mtitle.shown { opacity: 1; }
-    .mbtn { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border: 0; background: none; color: var(--accent); cursor: pointer; }
+    .mbtn { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border: 0; background: none; color: var(--accent-text); cursor: pointer; }
     /* iOS tab bar: fixed to the bottom, clear of the home indicator */
     .tabbar { display: grid; grid-template-columns: repeat(5, 1fr); position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
       padding: 4px var(--safe-r) var(--safe-b) var(--safe-l); background: color-mix(in srgb, var(--surface) 82%, transparent);
       -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px); border-top: 0.5px solid var(--border); }
     .tabbar button { display: flex; flex-direction: column; align-items: center; gap: 2px; min-height: 49px; padding: 4px 0 2px; border: 0; background: none;
       color: var(--muted); font-size: 10px; font-weight: 500; cursor: pointer; }
-    .tabbar button.current { color: var(--accent); }
+    .tabbar button.current { color: var(--accent-text); }
     .tabbar button:active { opacity: 0.6; }
     /* More: an iOS sheet with inset grouped rows */
     .sheet { width: 100%; max-width: 100%; margin: auto 0 0; border: 0; border-radius: 12px 12px 0 0; background: var(--bg);
